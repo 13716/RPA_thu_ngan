@@ -18,7 +18,24 @@ import re
 import sys
 import time
 
-ZALO_EXE = r"C:\Users\hello\AppData\Local\Programs\Zalo\Zalo.exe"
+def _find_zalo_exe() -> str:
+    """Tự dò Zalo.exe theo máy hiện tại (không gắn cứng tên user)."""
+    import glob
+    p = os.environ.get("ZALO_EXE")                 # cho phép .env ghi đè
+    if p and os.path.exists(p):
+        return p
+    la = os.environ.get("LOCALAPPDATA", "")
+    cands = [os.path.join(la, "Programs", "Zalo", "Zalo.exe")]
+    cands += sorted(glob.glob(os.path.join(la, "Programs", "Zalo", "Zalo-*", "Zalo.exe")), reverse=True)
+    cands += [r"C:\Program Files (x86)\VNG\Zalo\Zalo.exe",
+              r"C:\Program Files\Zalo\Zalo.exe"]
+    for c in cands:
+        if c and os.path.exists(c):
+            return c
+    return cands[0]                                # fallback (báo lỗi rõ khi mở)
+
+
+ZALO_EXE = _find_zalo_exe()
 ZALO_PASSWORD = os.environ.get("ZALO_PASSWORD", "")   # đặt trong .env: ZALO_PASSWORD=...
 
 
