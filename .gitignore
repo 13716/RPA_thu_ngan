@@ -1,0 +1,23 @@
+# Bí mật — KHÔNG commit
+.env
+*.env
+
+# File tạm / sinh ra khi chạy
+_tmp/
+screenshots/
+debug_output/
+form_cache/
+pdf_to_md/
+__pycache__/
+*.pyc
+
+# Demo Access tự sinh
+hoadon_demo.accdb
+*.laccdb
+
+# Báo cáo Excel tự tạo
+bao_cao*.xlsx
+
+# OCR engine cache
+.ai-log/
+demo_*.xlsx

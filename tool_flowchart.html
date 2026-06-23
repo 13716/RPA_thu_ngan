@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPA Hoá đơn — Flowchart kiến trúc tool (đa đích + fallback CUA)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{--purple:#5645d4;--green:#0d9488;--blue:#2563eb;--cua:#7c3aed;--bg:#fafafa;--ink:#1a1a2e;--mut:#6b7280;--bd:#e5e7eb;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--ink);padding:28px 32px;max-width:1100px;margin:0 auto;}
+  h1{font-size:22px;font-weight:800;}
+  h1 small{display:block;font-size:13px;color:var(--mut);font-weight:500;margin-top:4px;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:#fff;}
+  .mermaid{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:18px;margin-top:8px;overflow-x:auto;}
+  .note{background:#fff;border:1px solid var(--bd);border-left:3px solid var(--purple);border-radius:0 8px 8px 0;padding:12px 16px;margin-top:16px;font-size:13.5px;line-height:1.6;color:#374151;}
+  .note b{color:var(--ink);}
+  code{background:#f3f4f6;border-radius:4px;padding:1px 5px;font-size:12px;color:#3d31b0;}
+</style>
+</head>
+<body>
+  <h1>RPA Hoá đơn — Kiến trúc tool đa đích + fallback CUA
+    <small>Một nguồn OCR → điền vào Browser / Excel / Access / App desktop (OH) / Zalo. Bậc tất định trước, CUA Gemini đỡ khi gãy.</small>
+  </h1>
+
+  <div class="legend">
+    <span class="pill" style="background:var(--green)">🟢 Bậc 1 — API/COM (nhanh, ổn định)</span>
+    <span class="pill" style="background:var(--blue)">🔵 Bậc 3 — UI tất định (Playwright/UIA)</span>
+    <span class="pill" style="background:var(--cua)">🟣 Bậc 4 — CUA Gemini (fallback)</span>
+    <span class="pill" style="background:#e65100">⚠️ Escalate — người</span>
+  </div>
+
+  <div class="mermaid">
+flowchart TD
+  A([📄 Chứng từ: ảnh / PDF]) --> B[🔍 OCR + trích xuất theo schema]
+  B --> C[📋 dict trường: số HĐ · ngày · NCC · tiền · thuế...]
+  C --> D{Đích là gì?}
+
+  D -->|Excel / Access| L1G[🟢 Bậc 1 — API/COM<br/>openpyxl · Access COM]
+  D -->|Google Form| FRM{Có endpoint POST?}
+  D -->|App desktop OH / Zalo| DSK{Có API? SOAP/COM}
+
+  FRM -->|Có| L1P[🟢 Bậc 1 — HTTP POST]
+  FRM -->|Không| PW[🔵 Bậc 3 — Playwright DOM]
+  PW --> PWk{Thành công?}
+  PWk -->|Có| V
+  PWk -->|DOM đổi / selector gãy| CUA
+
+  DSK -->|Có| L1S[🟢 Bậc 1 — gọi SOAP/COM]
+  DSK -->|Không| UIA{Phơi cây UIA?}
+  UIA -->|Có| PU[🔵 Bậc 3 — pywinauto<br/>SetValue / Invoke]
+  UIA -->|Electron/Citrix/đổi layout| CUA
+  PU --> PUk{Thành công?}
+  PUk -->|Có| V
+  PUk -->|UIA gãy| CUA
+
+  CUA[🟣 Bậc 4 — CUA Gemini<br/>nhìn màn hình · click toạ độ]
+
+  L1G --> V
+  L1P --> V
+  L1S --> V
+  CUA --> V
+
+  V[✅ Verification maker-checker<br/>đọc lại / đối chiếu nguồn] --> VR{Khớp nguồn?}
+  VR -->|Đúng| OK([🎉 Hoàn tất + log/screenshot])
+  VR -->|Sai / fail 3 lần| ESC[⚠️ Escalate — người xử lý]
+  ESC -.->|thử lại bậc khác| D
+
+  classDef api fill:#d1faf4,stroke:#0d9488,color:#0f5e57;
+  classDef det fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef cua fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+  classDef esc fill:#fff7ed,stroke:#e65100,color:#9a3412;
+  class L1G,L1P,L1S api;
+  class PW,PU det;
+  class CUA cua;
+  class ESC esc;
+  </div>
+
+  <div class="note">
+    <b>Nguyên tắc:</b> mỗi đích thử <b>bậc thấp trước</b> (có API → Bậc 1; không thì UI tất định Bậc 3),
+    chỉ <b>rơi xuống CUA Gemini (Bậc 4)</b> khi bậc tất định <b>gãy</b> — DOM đổi, app không phơi UIA (Electron/Citrix),
+    hoặc app đổi layout sau nâng cấp. <b>Verification (maker-checker)</b> gác mọi nhánh: đọc lại giá trị/đối chiếu nguồn;
+    lệch hoặc fail 3 lần thì <b>escalate cho người</b> (và có thể thử lại bằng bậc khác). Đã hiện thực: <code>--form</code>,
+    <code>--excel</code>, <code>--access</code>, <code>--app</code>, <code>--zalo</code>. <b>Cần làm:</b> nhánh CUA Gemini
+    (browser-use cho web · Gemini computer-use cho desktop) — hiện là điểm fallback trong thiết kế.
+  </div>
+</body>
+</html>

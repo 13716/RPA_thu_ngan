@@ -1,0 +1,17 @@
+{
+  "_help": "Mẫu profile cho 1 app desktop. Copy file này, đổi tên thành <ten_app>.json, điền các trường. Lấy auto_id/name bằng: py -3.11 inspect_uia.py \"<tên cửa sổ>\" --all",
+  "name": "Tên app hiển thị",
+  "method": "uia",
+  "_method_note": "uia = app KHÔNG có API (pywinauto). com = app có API COM (Office/Access).",
+  "window_title": "phần tiêu đề cửa sổ (regex 1 phần)",
+  "exe": "",
+  "_exe_note": "đường dẫn .exe hoặc .accdb để tự mở; để trống nếu app đã mở sẵn",
+  "fields": [
+    {"key": "so_hoa_don", "label": "Số hoá đơn", "name": "txtSoHoaDon", "type": "text"},
+    {"key": "ngay_lap", "label": "Ngày lập", "name": "txtNgayLap", "type": "date"}
+  ],
+  "_fields_note": "key=khoá nội bộ; label=nhãn để OCR biết trích gì; name HOẶC auto_id=định danh ô; type=text|date",
+  "submit": {"keys": "+{ENTER}"},
+  "_submit_note": "{\"auto_id\":\"btnLuu\"} hoặc {\"name\":\"Lưu\"} hoặc {\"keys\":\"+{ENTER}\"}",
+  "amount_keys": ["tien_truoc_thue", "tong_thanh_toan"]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Microsoft Access (hoadon_demo)",
+  "method": "com",
+  "window_title": "Access",
+  "exe": "hoadon_demo.accdb",
+  "fields": [
+    {"key": "so_hoa_don",      "label": "Số hoá đơn",           "name": "txtSoHoaDon",      "type": "text"},
+    {"key": "ky_hieu",         "label": "Ký hiệu hoá đơn",      "name": "txtKyHieu",        "type": "text"},
+    {"key": "ngay_lap",        "label": "Ngày lập",             "name": "txtNgayLap",       "type": "date"},
+    {"key": "ten_ncc",         "label": "Tên nhà cung cấp",     "name": "txtTenNCC",        "type": "text"},
+    {"key": "mst_ncc",         "label": "MST nhà cung cấp",     "name": "txtMST",           "type": "text"},
+    {"key": "dien_giai",       "label": "Diễn giải",            "name": "txtDienGiai",      "type": "text"},
+    {"key": "tien_truoc_thue", "label": "Tiền trước thuế",      "name": "txtTienTruocThue", "type": "text"},
+    {"key": "thue_suat",       "label": "Thuế suất GTGT",       "name": "txtThueSuat",      "type": "text"},
+    {"key": "tong_thanh_toan", "label": "Tổng tiền thanh toán", "name": "txtTongThanhToan", "type": "text"}
+  ],
+  "submit": {"keys": "+{ENTER}"},
+  "amount_keys": ["tien_truoc_thue", "tong_thanh_toan"]
+}

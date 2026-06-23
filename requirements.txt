@@ -1,0 +1,15 @@
+# RPA hoá đơn — phụ thuộc (cài bằng Python 3.11)
+#   py -3.11 -m pip install -r requirements.txt
+#   py -3.11 -m playwright install chromium   # (tuỳ chọn — script dùng Chrome sẵn có qua channel="chrome")
+
+requests            # HTTP POST form, tải responses CSV
+playwright          # Bậc 3 web (điều khiển Chrome)
+pdfplumber          # đọc text/bảng PDF điện tử
+pymupdf             # render PDF scan -> ảnh (import fitz)
+opencv-python       # tiền xử lý ảnh (import cv2)
+pillow              # ảnh (import PIL)
+numpy
+python-dotenv       # đọc .env (import dotenv)
+openpyxl            # Excel
+pywin32             # COM: Excel/Access/clipboard (import win32com, win32clipboard)
+pywinauto           # Bậc 3 desktop (UIA) — Zalo/OH/app khác

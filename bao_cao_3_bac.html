@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Báo cáo so sánh 3 bậc — RPA điền Google Form</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--p:#5645d4;--pl:#f0eefb;--pd:#3d31b0;--ink:#1a1a2e;--mut:#6b7280;--bd:#e5e7eb;--bg:#fafafa;
+ --t1:#0d9488;--t3:#2563eb;--t4:#7c3aed;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--ink);max-width:980px;margin:0 auto;padding:30px 36px;}
+h1{font-size:24px;font-weight:800;}
+h1 small{display:block;font-size:13px;color:var(--mut);font-weight:500;margin-top:4px;}
+h2{font-size:17px;font-weight:700;margin:26px 0 12px;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:18px;}
+.card{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:16px 18px;text-align:center;}
+.card .n{font-size:26px;font-weight:800;}
+.card .l{font-size:11.5px;color:var(--mut);margin-top:3px;}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--bd);border-radius:10px;overflow:hidden;}
+th{background:var(--pl);color:var(--pd);padding:9px 11px;text-align:left;font-weight:600;}
+td{padding:9px 11px;border-bottom:1px solid var(--bd);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+.pill{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;color:#fff;}
+.bar-row{display:grid;grid-template-columns:120px 1fr 70px;align-items:center;gap:10px;margin:8px 0;font-size:12.5px;}
+.bar{height:22px;border-radius:5px;color:#fff;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:600;min-width:34px;}
+.callout{border-left:3px solid var(--p);background:var(--pl);padding:12px 16px;border-radius:0 8px 8px 0;font-size:13px;color:var(--pd);margin:14px 0;line-height:1.6;}
+.warn{background:#fffbeb;border-left-color:#f59e0b;color:#92400e;}
+.good{color:var(--t1);font-weight:600;}.bad{color:#c0392b;font-weight:600;}
+.foot{text-align:center;color:var(--mut);font-size:11px;border-top:1px solid var(--bd);margin-top:26px;padding-top:14px;}
+</style>
+</head>
+<body>
+<h1>So sánh 3 bậc tự động hoá điền Google Form
+  <small>Cùng bộ hoá đơn · số đo thực đo bằng benchmark.py + verify.py · 23/06/2026</small>
+</h1>
+
+<div class="cards">
+  <div class="card"><div class="n" style="color:var(--mut)">~7s</div><div class="l">OCR / hoá đơn (chung cả 3 bậc)</div></div>
+  <div class="card"><div class="n" style="color:var(--t1)">1.4s</div><div class="l">Bậc 1 POST — điền/bản ghi</div></div>
+  <div class="card"><div class="n" style="color:var(--t3)">7.2s</div><div class="l">Bậc 3 Playwright</div></div>
+  <div class="card"><div class="n" style="color:var(--t4)">48.3s</div><div class="l">Bậc 4 CUA Gemini</div></div>
+</div>
+
+<h2>Thời gian điền / bản ghi (không tính OCR)</h2>
+<div class="bar-row"><span><span class="pill" style="background:var(--t1)">Bậc 1 POST</span></span>
+  <span><span class="bar" style="background:var(--t1);width:3%">1.4s</span></span><span>3/3 ✓</span></div>
+<div class="bar-row"><span><span class="pill" style="background:var(--t3)">Bậc 3 Playwright</span></span>
+  <span><span class="bar" style="background:var(--t3);width:15%">7.2s</span></span><span>3/3 ✓</span></div>
+<div class="bar-row"><span><span class="pill" style="background:var(--t4)">Bậc 4 CUA</span></span>
+  <span><span class="bar" style="background:var(--t4);width:100%">48.3s</span></span><span>1/2</span></div>
+
+<h2>Bảng so sánh chi tiết</h2>
+<table>
+  <tr><th>Tiêu chí</th><th>Bậc 1 — POST</th><th>Bậc 3 — Playwright</th><th>Bậc 4 — CUA Gemini</th></tr>
+  <tr><td>Thời gian điền / bản ghi</td><td><b>~1.4s</b> (1.3–1.5)</td><td>~7.2s (6.0–9.1)</td><td><b>~48.3s</b> (44.7–51.9)</td></tr>
+  <tr><td>Tỉ lệ submit thành công</td><td>3/3 (100%)</td><td>3/3 (100%)</td><td><b>1/2 (50%)</b></td></tr>
+  <tr><td>Độ đúng giá trị (verify)</td><td colspan="3" class="good">mismatch = 0 — mọi dòng đã nộp đều ĐÚNG giá trị (7/10 verified; 3 missing là hoá đơn không chạy)</td></tr>
+  <tr><td>Chi phí vận hành</td><td>~0 (HTTP)</td><td>~0 (open-source)</td><td class="bad">tốn token Gemini/bản ghi</td></tr>
+  <tr><td>Phụ thuộc</td><td><code>entry id</code> + endpoint</td><td>DOM / selector</td><td>chỉ pixel (nhìn ảnh)</td></tr>
+  <tr><td>Chịu UI thay đổi</td><td class="bad">Kém</td><td class="bad">Kém</td><td class="good">Tốt (tự thích nghi)</td></tr>
+  <tr><td>Mở trình duyệt</td><td>Không</td><td>Có (+ screenshot)</td><td>Có</td></tr>
+  <tr><td>Khi nào dùng</td><td>UI ổn định, cần nhanh/rẻ</td><td>UI ổn định, cần bằng chứng</td><td>UI hay đổi / không selector</td></tr>
+</table>
+
+<h2>Hành vi bất ngờ của CUA (R3)</h2>
+<div class="callout warn">
+  <b>Nguyên nhân CUA fail 1/2:</b> ô <b>"Ngày lập"</b> của Google Form là định dạng <b>mm/dd/yyyy (Mỹ)</b>.
+  CUA gõ <code>18/05/2026</code> → tháng "18" không hợp lệ → form báo <b>"Ngày không hợp lệ"</b> và <b>chặn submit</b>.
+  Các ô text + radio (8%) vẫn điền đúng — lỗi chỉ ở ô ngày. <b>Cách sửa:</b> với CUA, gõ ngày theo thứ tự
+  tháng-ngày-năm (<code>05/18/2026</code>) hoặc gõ chuỗi số <code>05182026</code>.
+</div>
+
+<h2>Kết luận</h2>
+<div class="callout">
+  Số đo khớp khung lý thuyết: <b>POST nhanh nhất (~34× so với CUA) và ổn định nhất</b>; Playwright chậm hơn ~5×
+  nhưng có <b>screenshot bằng chứng</b>; <b>CUA chậm + xác suất</b> (50%) — giá trị của nó <b>không phải tốc độ/độ ổn định</b>
+  mà là <b>tự thích nghi khi selector/DOM gãy</b>. Khuyến nghị: <b>POST/Playwright làm chính</b>, <b>CUA chỉ làm lưới an toàn (fallback)</b>
+  khi UI thay đổi — đúng vai "Bậc 4" trong thang thực thi. <b>"Đã submit" ≠ "đã đúng"</b>: chỉ bản ghi qua <code>verify.py</code> mới tính.
+</div>
+
+<div class="foot">RPA điền liệu hoá đơn (Nhóm B) · số liệu từ benchmark.py + verify.py · báo cáo so sánh 3 bậc</div>
+</body>
+</html>
