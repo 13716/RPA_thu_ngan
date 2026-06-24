@@ -75,7 +75,7 @@ def _rows_to_markdown(rows: "list[list]") -> str:
     return md
 
 
-def _csv_to_text(path: str) -> str:
+def _csv_rows(path: str) -> "list[list]":
     import csv
     delim = "\t" if Path(path).suffix.lower() == ".tsv" else ","
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
@@ -86,8 +86,29 @@ def _csv_to_text(path: str) -> str:
                 delim = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
             except Exception:
                 delim = ","
-        rows = list(csv.reader(f, delimiter=delim))
-    return _rows_to_markdown(rows)
+        return list(csv.reader(f, delimiter=delim))
+
+
+def _csv_to_text(path: str) -> str:
+    return _rows_to_markdown(_csv_rows(path))
+
+
+def read_table(path: str) -> "tuple[list, list] | None":
+    """(header, data_rows) cho CSV/Excel — để PHÁT HIỆN nhiều bản ghi (không gọi API).
+    None nếu không phải bảng (ảnh/PDF/Word/text)."""
+    ext = Path(path).suffix.lower()
+    rows = None
+    if ext in CSV_EXT:
+        rows = _csv_rows(path)
+    elif ext in XLSX_EXT:
+        from openpyxl import load_workbook
+        wb = load_workbook(path, read_only=True, data_only=True)
+        rows = [list(r) for r in wb.active.iter_rows(values_only=True)]
+        wb.close()
+    if not rows:
+        return None
+    data = [r for r in rows[1:] if r and any(c not in (None, "") for c in r)]
+    return rows[0], data
 
 
 def _xlsx_to_text(path: str) -> str:

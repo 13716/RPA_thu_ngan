@@ -129,7 +129,7 @@ def resolve_schema(arg_form: "str | None", refresh: bool = False) -> dict:
 
 
 # ── prompt động: sinh từ chính các trường của form ────────────────────────────
-def build_prompt(fields: "list[dict]", doc_text: "str | None") -> str:
+def build_prompt(fields: "list[dict]", doc_text: "str | None", multi: bool = False) -> str:
     lines = []
     for f in fields:
         d = f'- id="{_fid(f)}" | nhãn="{f["label"]}" | kiểu={f["type"]}'
@@ -139,9 +139,16 @@ def build_prompt(fields: "list[dict]", doc_text: "str | None") -> str:
             d += f' | CHỌN ĐÚNG 1 trong: {f["options"]}'
         lines.append(d)
     schema = "\n".join(lines)
+    if multi:
+        out_spec = (
+            "Chứng từ có thể chứa NHIỀU bản ghi (nhiều người / nhiều hoá đơn — vd mỗi DÒNG "
+            "trong bảng là 1 bản ghi). Hãy trả về MẢNG JSON [ {id: giá_trị}, ... ], MỖI PHẦN TỬ "
+            "là 1 bản ghi. Nếu chỉ có 1 bản ghi, trả mảng 1 phần tử. CHỈ in mảng JSON.\n"
+        )
+    else:
+        out_spec = "Hãy TRÍCH XUẤT giá trị cho đúng các trường dưới đây và CHỈ trả về JSON dạng {id: giá_trị}.\n"
     p = (
-        "Bạn nhận một chứng từ (hoá đơn / biểu mẫu / giấy tờ). Hãy TRÍCH XUẤT giá trị "
-        "cho đúng các trường dưới đây và CHỈ trả về JSON dạng {id: giá_trị}.\n"
+        "Bạn nhận một chứng từ (hoá đơn / biểu mẫu / giấy tờ). " + out_spec +
         "Trường nào không có thông tin LIÊN QUAN trong chứng từ thì để null.\n\n"
         f"CÁC TRƯỜNG CẦN TRÍCH:\n{schema}\n\n"
         "Quy tắc:\n"
@@ -233,10 +240,59 @@ def extract_values(doc_path: str, fields: "list[dict]") -> dict:
     return merged
 
 
-def _extract_items(doc: str, fields: "list[dict]"):
-    """OCR chứng từ + chuẩn hoá -> (items có 'value', danh sách issues)."""
+def _parse_records(text: str) -> "list[dict]":
+    """Bóc DANH SÁCH bản ghi từ output LLM (mảng [...] hoặc 1 object {...})."""
+    t = (text or "").strip()
+    fence = re.search(r"```(?:json)?\s*(.*?)```", t, re.S)
+    if fence:
+        t = fence.group(1).strip()
+    m = re.search(r"\[.*\]|\{.*\}", t, re.S)      # ưu tiên mảng nếu xuất hiện trước
+    if m:
+        t = m.group(0)
+    try:
+        obj = json.loads(t)
+    except Exception:
+        return []
+    if isinstance(obj, list):
+        return [x for x in obj if isinstance(x, dict)]
+    if isinstance(obj, dict):
+        for v in obj.values():                    # kiểu bọc {"records": [...]}
+            if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+                return v
+        return [obj]
+    return []
+
+
+def _extract_records(doc: str, fields: "list[dict]") -> "list[dict]":
+    """DANH SÁCH bản ghi {id: value} — 1 file có thể chứa nhiều người/hoá đơn.
+
+    CHỈ dùng prompt "mảng" (tốn thêm 1 lần gọi LLM) khi nguồn là BẢNG CSV/Excel có
+    >1 dòng dữ liệu (phát hiện rẻ, không gọi API). Còn lại (ảnh/PDF/1 dòng) đi đường
+    trích ĐƠN như cũ — đúng 1 lần gọi (tận dụng cache), tránh tốn quota oan."""
     print(f"\n🧾 OCR chứng từ: {doc}")
-    raw = extract_values(doc, fields)
+    try:
+        from doc_reader import read_table
+        tbl = read_table(doc)
+    except Exception:
+        tbl = None
+
+    if not (tbl and len(tbl[1]) > 1):
+        return [extract_values(doc, fields)]            # 1 bản ghi — 1 lần gọi
+
+    print(f"  📦 Bảng {len(tbl[1])} dòng → hỏi LLM tách nhiều bản ghi.")
+    pages = file_to_pages(doc)                          # bảng → 1 trang text markdown
+    adapter = create_ocr_adapter()
+    res = adapter.ocr([], prompt=build_prompt(fields, pages[0][1], multi=True))
+    if res.get("success"):
+        recs = _parse_records(res["text"])
+        if recs:
+            return recs
+    print("  ⚠️  Tách bản ghi lỗi → quay về trích đơn (1 bản ghi).")
+    return [extract_values(doc, fields)]
+
+
+def _items_from_values(raw: dict, fields: "list[dict]", *, idx: int = 0, total: int = 1):
+    """Chuẩn hoá 1 bản ghi {id: value} -> (items có 'value', issues chặn gửi)."""
     items, issues, optional_empty = [], [], []
     for f in fields:
         val, err = normalize_value(raw.get(_fid(f)), f)
@@ -250,7 +306,8 @@ def _extract_items(doc: str, fields: "list[dict]"):
                 optional_empty.append(f["label"])
         elif err:
             issues.append(f"{f['label']}: {err}")
-    print("\n📋 Giá trị trích xuất:")
+    head = f" (bản ghi {idx}/{total})" if total > 1 else ""
+    print(f"\n📋 Giá trị trích xuất{head}:")
     for it in items:
         req = " *" if it.get("required") else ""
         print(f"   • {it['label']:<24}{req} = {it['value']!r}")
@@ -262,6 +319,41 @@ def _extract_items(doc: str, fields: "list[dict]"):
         for i in issues:
             print(f"   - {i}")
     return items, issues
+
+
+def _extract_items(doc: str, fields: "list[dict]"):
+    """Tương thích cũ: trích 1 bản ghi (bản ghi đầu nếu file có nhiều)."""
+    recs = _extract_records(doc, fields)
+    return _items_from_values(recs[0], fields)
+
+
+def _run_records(args, fields, do_one, *, block_on_issues: bool = True) -> int:
+    """Trích N bản ghi từ args.doc → áp do_one(items) cho từng bản ghi (chỉ khi --submit).
+    do_one(items) -> mã (0 = OK). Trả 0 nếu MỌI bản ghi OK, ngược lại 2."""
+    records = _extract_records(args.doc, fields)
+    n = len(records)
+    if n > 1:
+        print(f"\n📦 Phát hiện {n} bản ghi trong file → xử lý LẦN LƯỢT.")
+    codes = []
+    for i, raw in enumerate(records, 1):
+        if n > 1:
+            print(f"\n{'═'*16} Bản ghi {i}/{n} {'═'*16}")
+        items, issues = _items_from_values(raw, fields, idx=i, total=n)
+        if not args.submit:
+            print("\n💡 Xem trước (chưa thực hiện). Thêm --submit để điền/gửi.")
+            codes.append(0)
+            continue
+        if issues and block_on_issues:
+            print("\n⛔ Còn trường BẮT BUỘC trống/không hợp lệ — BỎ QUA bản ghi này (maker–checker).")
+            codes.append(2)
+            continue
+        codes.append(do_one(items))
+    if n > 1:
+        ok = sum(1 for c in codes if c == 0)
+        bad = [c for c in codes if c != 0]
+        print(f"\n=== TỔNG KẾT: {ok}/{n} bản ghi OK"
+              + (f" (mã lỗi: {bad})" if bad else "") + " ===")
+    return 0 if all(c == 0 for c in codes) else 2
 
 
 def run_form(args) -> int:
@@ -276,15 +368,11 @@ def run_form(args) -> int:
         warn = " ⚠️ BẮT BUỘC → Google sẽ chặn gửi!" if f.get("required") else ""
         print(f"   ⏭️  Bỏ qua trường kiểu '{f['type']}' (chưa hỗ trợ): {f['label']}{warn}")
 
-    items, issues = _extract_items(args.doc, fields)
+    return _run_records(args, fields, lambda items: _form_submit_one(schema, items, args))
 
-    if not args.submit:
-        print("\n💡 Chưa gửi. Thêm --submit để điền lên form.")
-        return 0
-    if issues:
-        print("\n⛔ Còn trường trống/không hợp lệ — KHÔNG tự gửi (maker–checker).")
-        return 2
 
+def _form_submit_one(schema, items, args) -> int:
+    """Gửi 1 bản ghi lên Google Form (POST / CUA / Playwright + fallback)."""
     pages = schema.get("pages", 1)
     if args.post:
         print(f"\n📮 Gửi bằng HTTP POST... ({pages} trang)")
@@ -323,19 +411,12 @@ def run_app(args) -> int:
         print("   Soi app:  py -3.11 inspect_uia.py \"<tên app>\" --all  rồi điền auto_id.")
         return 1
     print(f"\n🖥️  App desktop: '{D.WINDOW_TITLE}'  ({len(fields)} ô)")
-    items, issues = _extract_items(args.doc, fields)
 
-    if not args.submit:
-        print("\n💡 Chưa điền. Thêm --submit để điền vào app.")
+    def do_one(items):
+        D.fill_desktop({it["id"]: it["value"] for it in items}, submit=True)
+        print("\n✅ Đã điền vào app desktop (kiểm cột [✓]/[≠] để đối chiếu).")
         return 0
-    if issues:
-        print("\n⛔ Còn trường trống/không hợp lệ — KHÔNG tự điền (maker–checker).")
-        return 2
-
-    values = {it["id"]: it["value"] for it in items}
-    D.fill_desktop(values, submit=True)
-    print("\n✅ Đã điền vào app desktop (kiểm cột [✓]/[≠] để đối chiếu).")
-    return 0
+    return _run_records(args, fields, do_one)
 
 
 def run_profile(args) -> int:
@@ -348,24 +429,18 @@ def run_profile(args) -> int:
     fields = desktop_profiles.schema(prof)
     method = prof.get("method", "uia")
     print(f"\n🖥️  App: {prof.get('name', args.profile)}  ({len(fields)} ô, bậc={method.upper()})")
-    items, issues = _extract_items(args.doc, fields)
 
-    if not args.submit:
-        print("\n💡 Chưa điền. Thêm --submit để điền vào app.")
+    def do_one(items):
+        values = {it["id"]: it["value"] for it in items}
+        if method == "com":
+            import access_filler
+            access_filler.fill_access(values, profile=prof, form_name=prof.get("form_name") or None)
+        else:
+            import desktop_filler
+            desktop_filler.fill_desktop(values, submit=True, profile=prof)
+        print("\n✅ Đã điền vào app theo profile.")
         return 0
-    if issues:
-        print("\n⛔ Còn trường trống/không hợp lệ — KHÔNG tự điền (maker–checker).")
-        return 2
-
-    values = {it["id"]: it["value"] for it in items}
-    if method == "com":
-        import access_filler
-        access_filler.fill_access(values, profile=prof)
-    else:
-        import desktop_filler
-        desktop_filler.fill_desktop(values, submit=True, profile=prof)
-    print("\n✅ Đã điền vào app theo profile.")
-    return 0
+    return _run_records(args, fields, do_one)
 
 
 def run_zalo(args) -> int:
@@ -381,17 +456,12 @@ def run_access(args) -> int:
     import access_filler
     fields = desktop_filler.schema()
     print(f"\n🗄️  Microsoft Access ({len(fields)} ô) — điền qua COM")
-    items, issues = _extract_items(args.doc, fields)
-    if not args.submit:
-        print("\n💡 Chưa điền. Thêm --submit để điền vào form Access.")
+
+    def do_one(items):
+        access_filler.fill_access({it["id"]: it["value"] for it in items}, submit=True)
+        print("\n✅ Đã điền vào form Access. Kiểm bảng HoaDon để đối chiếu.")
         return 0
-    if issues:
-        print("\n⛔ Còn trường trống/không hợp lệ — KHÔNG tự điền (maker–checker).")
-        return 2
-    values = {it["id"]: it["value"] for it in items}
-    access_filler.fill_access(values, submit=True)
-    print("\n✅ Đã điền vào form Access. Kiểm bảng HoaDon để đối chiếu.")
-    return 0
+    return _run_records(args, fields, do_one)
 
 
 def run_excel(args) -> int:
@@ -399,22 +469,19 @@ def run_excel(args) -> int:
     sheet_name, fields = excel_target.inspect_excel(args.excel, args.sheet, args.header_row)
     print(f"   Sheet '{sheet_name}'  ({len(fields)} cột)")
 
-    items, _issues = _extract_items(args.doc, fields)
-
-    if not args.submit:
-        print("\n💡 Chưa ghi. Thêm --submit để thêm dòng vào báo cáo.")
+    def do_one(items):
+        values = {it["id"]: it["value"] for it in items}
+        if args.watch:
+            print("\n👁️  Mở Excel để xem điền trực tiếp (win32com)...")
+            import excel_com
+            row = excel_com.append_row_visible(args.excel, args.sheet, args.header_row,
+                                               fields, values, delay=0.6)
+        else:
+            row = excel_target.append_row(args.excel, args.sheet, args.header_row, fields, values)
+        print(f"\n✅ Đã thêm dữ liệu vào dòng {row} của '{sheet_name}' trong {args.excel}")
         return 0
-
-    values = {it["id"]: it["value"] for it in items}
-    if args.watch:
-        print("\n👁️  Mở Excel để xem điền trực tiếp (win32com)...")
-        import excel_com
-        row = excel_com.append_row_visible(args.excel, args.sheet, args.header_row,
-                                           fields, values, delay=0.6)
-    else:
-        row = excel_target.append_row(args.excel, args.sheet, args.header_row, fields, values)
-    print(f"\n✅ Đã thêm dữ liệu vào dòng {row} của '{sheet_name}' trong {args.excel}")
-    return 0
+    # Excel = báo cáo: không chặn theo maker-checker (ghi cả bản ghi thiếu trường tùy chọn)
+    return _run_records(args, fields, do_one, block_on_issues=False)
 
 
 EPILOG = """\
