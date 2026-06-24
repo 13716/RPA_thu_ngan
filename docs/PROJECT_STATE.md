@@ -49,7 +49,8 @@ Cụ thể: đọc chứng từ (ảnh/PDF) bằng OCR → điền tự động 
 | `desktop_filler.py` | điền app desktop qua pywinauto-UIA (profile-aware) |
 | `desktop_profiles.py` + `profiles/*.json` | hệ profile đa-app (access.json, _template.json) |
 | `zalo_demo.py` | bộ đồ nghề desktop: get_zalo/wait_ready/force_front/unlock/open_chat/set_clipboard |
-| `zalo_send_invoice.py` | OCR → format tin nhắn → gửi vào chat Zalo |
+| `doc_extract.py` | **trích xuất ĐỘNG**: ảnh/PDF → mọi cặp nhãn–giá trị + đoán loại tài liệu (không khoá 9 trường hoá đơn) |
+| `zalo_send_invoice.py` | OCR **động** (doc_extract) → format tin nhắn theo đúng tài liệu → gửi vào chat Zalo |
 | `verify.py` | đối soát responses ↔ nguồn (verified/mismatch/missing) |
 | `benchmark.py` | đo thời gian/tỉ lệ 3 bậc |
 | `app_gui.py` | GUI Tkinter bấm-nút (gọi lại autofill) |

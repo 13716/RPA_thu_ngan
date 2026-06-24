@@ -1,6 +1,6 @@
 # rpa_hoadon — Trích xuất hoá đơn (OCR) → điền tự động vào nhiều "đích"
 
-Đọc chứng từ (ảnh/PDF) bằng OCR, rồi điền vào **5 loại đích** qua **một lệnh `autofill.py`**.
+Đọc chứng từ (**ảnh, PDF, Excel, CSV/TSV, Word, text**) bằng OCR/parse, rồi điền vào **5 loại đích** qua **một lệnh `autofill.py`**.
 Kiến trúc tách 4 mảnh — đổi đích chỉ thay mảnh "soi" + "điền".
 
 ```
@@ -136,7 +136,7 @@ py -3.11 zalo_send_invoice.py "Tên người" --doc "..\...\hoadon.pdf" --send
 |------|------|---------|
 | Nhạc trưởng | `autofill.py` | tool hợp nhất: `--form` / `--excel` / `--app` + `--doc` |
 | Khởi tạo | `_bootstrap.py` | temp→D:, nạp .env, nối pipeline OCR ở thư mục cha |
-| Đọc tài liệu | `doc_reader.py` | ảnh/PDF → trang (PDF điện tử đọc text, scan thì OCR ảnh) |
+| Đọc tài liệu | `doc_reader.py` | ảnh/PDF/Excel/CSV/Word/text → trang (PDF điện tử & file dữ liệu đọc thẳng text, ảnh/scan thì OCR) |
 | Chuẩn hoá | `ocr_to_form.py` | ngày `DD/MM/YYYY`, thuế `0/5/8/10%`, số tiền |
 | Soi đích | `inspect_form.py` / `inspect_uia.py` | soi Google Form / soi cây UIA app desktop |
 | Điền — Form | `form_filler.py`, `fill_invoice_form*.py` | Playwright / HTTP POST |
@@ -145,7 +145,8 @@ py -3.11 zalo_send_invoice.py "Tên người" --doc "..\...\hoadon.pdf" --send
 | Đa-app | `desktop_profiles.py`, `profiles/*.json` | mỗi app = 1 profile |
 | Fallback | `cua_fallback.py` | CUA Gemini (Bậc 4) cho web form |
 | Verification | `verify.py` | đối soát responses ↔ nguồn (R4) |
-| Demo desktop | `zalo_demo.py`, `zalo_send_invoice.py` | mở app→mở khoá→điều hướng→điền→gửi |
+| Trích động | `doc_extract.py` | đọc ảnh/PDF → mọi cặp nhãn–giá trị + đoán loại tài liệu (không khoá hoá đơn) |
+| Demo desktop | `zalo_demo.py`, `zalo_send_invoice.py` | mở app→mở khoá→điều hướng→điền→gửi (tin nhắn động theo tài liệu) |
 | Chuyên hoá đơn | `hoadon_to_form.py`, `form_config.py` | bản cố định 9 trường (tiền thân autofill) |
 
 ## Bộ "đồ nghề" desktop (trong zalo_demo.py — tái dùng cho mọi app)
