@@ -109,8 +109,12 @@ class App:
         self.extra_label = tk.StringVar()
         ttk.Label(f3, textvariable=self.extra_label).pack(anchor="w")
         self.extra_var = tk.StringVar()
-        self.extra_entry = ttk.Combobox(f3, textvariable=self.extra_var)
-        self.extra_entry.pack(fill="x", pady=3)
+        f3e = ttk.Frame(f3); f3e.pack(fill="x", pady=3)
+        self.extra_entry = ttk.Combobox(f3e, textvariable=self.extra_var)
+        self.extra_entry.pack(side="left", fill="x", expand=True)
+        self.btn_newapp = ttk.Button(f3e, text="➕ App mới…", width=12,
+                                     command=self.open_profile_creator)
+        # chỉ hiện khi đích = App desktop (pack/forget trong on_target)
         self.headed = tk.BooleanVar(value=True)
         ttk.Checkbutton(f3, text="Hiện trình duyệt (Form)", variable=self.headed).pack(anchor="w")
         self.watch = tk.BooleanVar(value=False)
@@ -169,6 +173,11 @@ class App:
         t = self.target.get()
         lbl, default = EXTRA[t]
         self.extra_label.set(lbl)
+        # nút "➕ App mới…" chỉ hiện ở đích App desktop
+        if t == "profile":
+            self.btn_newapp.pack(side="left", padx=(6, 0))
+        else:
+            self.btn_newapp.pack_forget()
         if t == "profile":
             profs = desktop_profiles.list_profiles()
             self.extra_entry.configure(values=profs, state="readonly")
@@ -179,6 +188,123 @@ class App:
         else:
             self.extra_entry.configure(values=[], state="normal")
             self.extra_var.set(default)
+
+    def open_profile_creator(self):
+        """Dialog: soi cây UIA của 1 app đang mở → sinh sẵn profile JSON → sửa & lưu.
+        Lưu xong app mới hiện ngay trong dropdown 'App desktop'."""
+        import json
+        import inspect_uia
+
+        win = tk.Toplevel(self.root)
+        win.title("Soi app & tạo profile")
+        win.geometry("780x640")
+        win.attributes("-topmost", True)
+        pad = {"padx": 8, "pady": 4}
+
+        # hàng 1: chọn cửa sổ + Liệt kê + Soi
+        top = ttk.Frame(win); top.pack(fill="x", **pad)
+        ttk.Label(top, text="Cửa sổ app:").pack(side="left")
+        title_var = tk.StringVar()
+        cb = ttk.Combobox(top, textvariable=title_var)
+        cb.pack(side="left", fill="x", expand=True, padx=6)
+
+        def fill_windows():
+            try:
+                cb.configure(values=inspect_uia.list_window_titles())
+            except Exception as e:
+                messagebox.showerror("Lỗi", str(e), parent=win)
+        ttk.Button(top, text="🔄 Liệt kê", command=fill_windows).pack(side="left")
+
+        # bảng control soi được
+        cols = ("#", "type", "auto_id", "name", "val")
+        tv = ttk.Treeview(win, columns=cols, show="headings", height=9)
+        for c, w in zip(cols, (36, 80, 210, 300, 40)):
+            tv.heading(c, text=c); tv.column(c, width=w, anchor="w")
+        tv.pack(fill="both", expand=True, **pad)
+
+        ttk.Label(win, text="Profile JSON (sửa 'key'/'label'/'type', xoá ô thừa rồi Lưu):"
+                  ).pack(anchor="w", padx=8)
+        txt = tk.Text(win, height=12, font=("Consolas", 9))
+        txt.pack(fill="both", expand=True, **pad)
+
+        # hàng cuối: tên + method + Lưu
+        bot = ttk.Frame(win); bot.pack(fill="x", **pad)
+        ttk.Label(bot, text="Tên profile:").pack(side="left")
+        name_var = tk.StringVar()
+        ttk.Entry(bot, textvariable=name_var, width=18).pack(side="left", padx=6)
+        ttk.Label(bot, text="method:").pack(side="left")
+        method_var = tk.StringVar(value="uia")
+        ttk.Combobox(bot, textvariable=method_var, values=["uia", "com"], width=6,
+                     state="readonly").pack(side="left", padx=4)
+
+        def do_soi():
+            t = title_var.get().strip()
+            if not t:
+                messagebox.showwarning("Thiếu", "Chọn/nhập tên cửa sổ.", parent=win)
+                return
+
+            def work():
+                try:
+                    wt, rows = inspect_uia.collect_controls(t)
+                except Exception as ex:
+                    err = str(ex) or repr(ex)
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Lỗi soi", err, parent=win))
+                    return
+
+                def render():
+                    tv.delete(*tv.get_children())
+                    for i, r in enumerate(rows, 1):
+                        tv.insert("", "end", values=(i, r["type"], r["auto_id"],
+                                  r["name"], "✔" if r["value"] else ""))
+                    inputs = [r for r in rows if r["type"] != "button"]
+                    prof = {
+                        "name": wt,
+                        "method": method_var.get(),
+                        "window_title": t,
+                        "exe": "",
+                        "fields": [
+                            {"key": inspect_uia._slug(r["name"]) or f"field{i}",
+                             "label": r["name"] or "",
+                             **({"auto_id": r["auto_id"]} if r["auto_id"]
+                                else {"name": r["name"]}),
+                             "type": r["type"]}
+                            for i, r in enumerate(inputs, 1)
+                        ],
+                        "submit": {"keys": "+{ENTER}"},
+                    }
+                    txt.delete("1.0", "end")
+                    txt.insert("1.0", json.dumps(prof, ensure_ascii=False, indent=2))
+                    if not name_var.get().strip():
+                        name_var.set(inspect_uia._slug(wt)[:20])
+                self.root.after(0, render)
+            threading.Thread(target=work, daemon=True).start()
+        ttk.Button(top, text="🔍 Soi", command=do_soi).pack(side="left", padx=4)
+
+        def do_save():
+            nm = name_var.get().strip()
+            if not nm or nm.startswith("_"):
+                messagebox.showwarning("Tên không hợp lệ",
+                    "Nhập tên profile (không bắt đầu bằng '_').", parent=win)
+                return
+            try:
+                data = json.loads(txt.get("1.0", "end"))
+            except Exception as e:
+                messagebox.showerror("JSON lỗi", f"Sửa lại JSON:\n{e}", parent=win)
+                return
+            data["method"] = method_var.get()
+            desktop_profiles.DIR.mkdir(exist_ok=True)
+            path = desktop_profiles.DIR / f"{nm}.json"
+            if path.exists() and not messagebox.askyesno(
+                    "Ghi đè?", f"profiles/{nm}.json đã tồn tại — ghi đè?", parent=win):
+                return
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            messagebox.showinfo("Đã lưu", f"profiles/{nm}.json", parent=win)
+            self.target.set("profile"); self.on_target(); self.extra_var.set(nm)
+            win.destroy()
+        ttk.Button(bot, text="💾 Lưu profile", command=do_save).pack(side="right")
+
+        fill_windows()
 
     def run(self, submit):
         docs = self._resolve_docs()
