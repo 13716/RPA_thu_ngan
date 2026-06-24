@@ -63,6 +63,16 @@ def composer_text(dlg) -> str:
     return read_value(c)
 
 
+_PLACEHOLDER_RE = re.compile(r"(?i)tin nh.n t.i|^\s*nh.p\s*@")
+
+
+def _composer_empty(text: str) -> bool:
+    """Ô soạn tin Zalo khi TRỐNG hiển thị placeholder 'Nhập @, tin nhắn tới <tên>' ở Name
+    → coi như rỗng. Tránh nhầm placeholder thành 'còn nội dung chưa gửi'."""
+    t = (text or "").strip()
+    return (not t) or bool(_PLACEHOLDER_RE.search(t))
+
+
 def focus_composer(dlg, composer) -> bool:
     """Focus ô soạn tin: click vào placeholder 'tin nhắn tới ...' (đang hiển thị)."""
     # 1) tìm ĐÚNG placeholder 'tin nhắn tới' (loại 'Tin nhắn thoại'), click nó
@@ -122,13 +132,13 @@ def run(name: str, doc: str, do_send: bool = False) -> int:
     send_keys("^v")
     time.sleep(0.6)
     val = composer_text(dlg)                       # đọc tên richInput
-    if not val.strip():
+    if _composer_empty(val):                       # vẫn placeholder = dán hụt
         print("⛔ Đã dán nhưng ô soạn tin vẫn trống → chưa focus/dán đúng chỗ.")
         print("   Gửi tôi:  py -3.11 inspect_uia.py \"Zalo\" --all   (khi đang mở chat).")
         return 2
     print(f"📋 Đã dán & xác minh nội dung ô soạn tin (đọc lại: {val[:40]!r}...)")
 
-    # 5) gửi: Enter rồi XÁC MINH ô đã trống (Zalo xoá ô sau khi gửi)
+    # 5) gửi: Enter rồi XÁC MINH ô đã trống (Zalo xoá ô → quay về placeholder sau khi gửi)
     if not do_send:
         print("💡 Chưa gửi (xem trước). Tự bấm Enter trong Zalo, hoặc chạy lại với --send.")
         return 0
@@ -136,7 +146,9 @@ def run(name: str, doc: str, do_send: bool = False) -> int:
     send_keys("{ENTER}")
     time.sleep(1.2)
     after = composer_text(dlg)
-    if val.strip() and not after.strip():
+    # Đã gửi nếu ô về trạng thái TRỐNG (placeholder) HOẶC nội dung vừa soạn đã biến mất.
+    head = val.strip()[:20]
+    if _composer_empty(after) or (head and head not in after):
         print(f"✅ Đã GỬI tin nhắn cho '{name}' (ô soạn tin đã trống sau khi gửi).")
         return 0
     print(f"⛔ CHƯA chắc gửi được — ô soạn tin sau Enter vẫn còn: {after[:40]!r}. Kiểm tra Zalo.")
