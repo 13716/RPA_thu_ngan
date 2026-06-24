@@ -21,7 +21,7 @@
 - [ ] Xử lý form **rẽ nhánh** (skip-logic) → `pageHistory` theo đúng đường đi.
 - [ ] Bộ **pytest** cho hàm thuần (normalize_date/vat/amount, to_form_dict, verify.reconcile, _coerce ngày,
       _match_option, _strip_json) — bắt hồi quy (vd lỗi múi giờ Excel đã gặp).
-- [ ] Dọn trùng `hoadon_to_form.py` (rpa_hoadon vs thư mục cha) — gom 1 bản.
+- [x] Dọn trùng `hoadon_to_form.py` — bản local chuyển `legacy/`, Zalo dùng `doc_extract`.
 
 ## Ưu tiên thấp / tương lai
 

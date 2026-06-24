@@ -41,7 +41,7 @@ Cụ thể: đọc chứng từ (ảnh/PDF) bằng OCR → điền tự động 
 | `inspect_form.py` | soi Google Form (FB_PUBLIC_LOAD_DATA_) → fields + entry + `pages` |
 | `inspect_uia.py` | soi cây UIA app desktop (`--all` in mọi control) |
 | `form_filler.py` | Playwright (đa trang) + POST (pageHistory) |
-| `fill_invoice_form*.py` | bản Playwright/POST cũ (tiền thân) |
+| `legacy/` | bản tiền thân đã lưu trữ (hoadon_to_form, fill_invoice_form*, form_config) — không còn dùng |
 | `cua_fallback.py` | CUA Gemini Vision (Bậc 4) cho web form |
 | `excel_target.py` / `excel_com.py` | Excel openpyxl / win32com (`--watch`) |
 | `access_filler.py` | Access qua COM (Forms.Controls.Value) |
@@ -54,7 +54,7 @@ Cụ thể: đọc chứng từ (ảnh/PDF) bằng OCR → điền tự động 
 | `verify.py` | đối soát responses ↔ nguồn (verified/mismatch/missing) |
 | `benchmark.py` | đo thời gian/tỉ lệ 3 bậc |
 | `app_gui.py` | GUI Tkinter bấm-nút (gọi lại autofill) |
-| `hoadon_to_form.py` / `form_config.py` | bản chuyên 9 trường hoá đơn (tiền thân) |
+| `doc_extract.py` | trích xuất ĐỘNG (mọi nhãn–giá trị) cho Zalo; `autofill` trích đa bản ghi |
 | `README.md` (root), `docs/DEMO.md`, `requirements.txt` | tài liệu + cài đặt + kịch bản demo |
 
 ## 5. Kiến trúc hiện tại
@@ -91,7 +91,8 @@ Cụ thể: đọc chứng từ (ảnh/PDF) bằng OCR → điền tự động 
 - **OCR quota Gemini free** có giới hạn theo ngày → chạy nhiều (CUA/benchmark) dễ cạn.
 - **OH chưa soi được:** máy không vào domain/VPN Vingroup (DNS `svm-ent-uat.vingroup.local` fail).
 - **Chưa có test tự động** (không theo TDD) — chỉ self-test trong `__main__` + chạy tay.
-- **Trùng `hoadon_to_form.py`** (rpa_hoadon + thư mục cha); zalo_send_invoice import bản cha do sys.path.
+- ~~Trùng `hoadon_to_form.py`~~ ĐÃ GỠ: bản local chuyển vào `legacy/`, Zalo dùng `doc_extract` (không
+  còn import hoadon_to_form). Bản ở thư mục cha (`ocr_vsf/`) là repo khác, không thuộc tool này.
 
 ## 8. Ràng buộc hệ thống
 

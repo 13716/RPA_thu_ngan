@@ -101,6 +101,12 @@ py -3.11 autofill.py --profile <ten> --doc "..\...\hoadon.pdf" --submit
 ```
 `method:"com"` cho app có API (Access); `method:"uia"` cho app không API (OH). Có sẵn `profiles/access.json`.
 
+**Hoặc tạo profile ngay trên GUI:** mở `app_gui.py` → chọn đích **App desktop** → bấm **"➕ App mới…"**
+→ *Liệt kê* cửa sổ → chọn app → *Soi* (in cây control + sinh sẵn JSON) → sửa `key`/`label`/`type`,
+chọn `method` (uia/com) → *Lưu*. App mới hiện ngay trong dropdown.
+Lưu ý: *Soi* chỉ thấy control qua UIA — Access chống UIA nên với Access form mới, lấy tên control
+(`Name`) từ **Design View của Access** rồi điền tay vào JSON, đặt `method:"com"`.
+
 ## 6) Fallback CUA Gemini (Bậc 4 — khi Bậc 3 gãy)
 
 ```powershell
@@ -139,7 +145,7 @@ py -3.11 zalo_send_invoice.py "Tên người" --doc "..\...\hoadon.pdf" --send
 | Đọc tài liệu | `doc_reader.py` | ảnh/PDF/Excel/CSV/Word/text → trang (PDF điện tử & file dữ liệu đọc thẳng text, ảnh/scan thì OCR) |
 | Chuẩn hoá | `ocr_to_form.py` | ngày `DD/MM/YYYY`, thuế `0/5/8/10%`, số tiền |
 | Soi đích | `inspect_form.py` / `inspect_uia.py` | soi Google Form / soi cây UIA app desktop |
-| Điền — Form | `form_filler.py`, `fill_invoice_form*.py` | Playwright / HTTP POST |
+| Điền — Form | `form_filler.py` | Playwright (đa trang) / HTTP POST |
 | Điền — Excel | `excel_target.py` (openpyxl), `excel_com.py` (Excel thật) | mỗi chứng từ = 1 dòng |
 | Điền — Desktop | `desktop_filler.py` (UIA), `access_filler.py` (Access COM) | điền app desktop |
 | Đa-app | `desktop_profiles.py`, `profiles/*.json` | mỗi app = 1 profile |
@@ -147,7 +153,7 @@ py -3.11 zalo_send_invoice.py "Tên người" --doc "..\...\hoadon.pdf" --send
 | Verification | `verify.py` | đối soát responses ↔ nguồn (R4) |
 | Trích động | `doc_extract.py` | đọc ảnh/PDF → mọi cặp nhãn–giá trị + đoán loại tài liệu (không khoá hoá đơn) |
 | Demo desktop | `zalo_demo.py`, `zalo_send_invoice.py` | mở app→mở khoá→điều hướng→điền→gửi (tin nhắn động theo tài liệu) |
-| Chuyên hoá đơn | `hoadon_to_form.py`, `form_config.py` | bản cố định 9 trường (tiền thân autofill) |
+| Tiền thân (lưu trữ) | `legacy/` | bản đầu đã thay bằng autofill/form_filler (xem `legacy/README.md`) |
 
 ## Bộ "đồ nghề" desktop (trong zalo_demo.py — tái dùng cho mọi app)
 

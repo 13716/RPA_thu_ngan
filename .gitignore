@@ -21,3 +21,6 @@ bao_cao*.xlsx
 # OCR engine cache
 .ai-log/
 demo_*.xlsx
+
+# Profile cá nhân (trỏ đường dẫn máy riêng) — không commit
+profiles/database1.json
