@@ -28,9 +28,9 @@ def _targets(items: list) -> list:
         if it.get("value") in (None, "", []):
             continue
         t = it["type"]
-        label = it["label"]
-        if t in ("radio", "dropdown", "scale", "checkbox"):
-            out.append({"id": f"t{i}", "act": "click",
+        label = it.get("q_title") or it["label"]
+        if t in ("radio", "dropdown", "scale", "checkbox", "rating", "grid"):
+            out.append({"id": f"t{i}", "act": "click", "item": it,
                         "desc": f"lựa chọn '{it['value']}' của câu hỏi \"{label}\"",
                         "value": it["value"]})
         else:
@@ -38,7 +38,7 @@ def _targets(items: list) -> list:
             if t == "date" and val.count("/") == 2:
                 d, m, y = val.split("/")           # ô date Google Form là mm/dd/yyyy (Mỹ)
                 val = f"{m}{d}{y}"                  # gõ chuỗi số MMDDYYYY -> hợp lệ
-            out.append({"id": f"t{i}", "act": "type",
+            out.append({"id": f"t{i}", "act": "type", "item": it,
                         "desc": f"ô nhập của câu hỏi \"{label}\"",
                         "value": val})
     return out
@@ -141,12 +141,22 @@ def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
         page.goto(form_url, wait_until="domcontentloaded")
         page.wait_for_timeout(1500)
 
-        # định vị + điền; ô nào Gemini bỏ sót -> THỬ LẠI (chụp lại, hỏi riêng) tối đa 3 vòng
-        pending = list(targets)
+        # ── HYBRID: DOM khớp-nhãn lo điền (CHÍNH XÁC), Gemini vision đỡ ô DOM không thấy ──
+        from form_filler import _try_fill_field
+
+        # PASS 1 — DOM khớp nhãn (không tốn Gemini); chống đặt nhầm giá trị
+        pending = []
+        for t in targets:
+            if _try_fill_field(page, t["item"]):
+                print(f"  • {t['act']:<5} ✓DOM ← {t['desc'][:42]}")
+            else:
+                pending.append(t)
+
+        # PASS 2.. — chỉ ô DOM KHÔNG thấy mới nhờ Gemini vision (toạ độ pixel)
         for attempt in range(1, 4):
             if not pending:
                 break
-            print(f"  👁️  CUA: Gemini định vị {len(pending)} ô (vòng {attempt})...")
+            print(f"  👁️  CUA vision: Gemini định vị {len(pending)} ô DOM không thấy (vòng {attempt})...")
             boxes = _ask_boxes(adapter, _shot_b64(page), pending)
             still = []
             for t in pending:
@@ -157,33 +167,38 @@ def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
                 cx, cy = _center(box, VW, VH)
                 if t["act"] == "type":
                     if not _type_at(page, cx, cy, str(t["value"])):
-                        print(f"  • type  @({cx:.0f},{cy:.0f}) ⚠️ không bắt được ô input → thử lại vòng sau")
                         still.append(t)
                         continue
                 else:
-                    page.mouse.click(cx, cy)        # radio/lựa chọn: chấm tròn dễ trúng
+                    page.mouse.click(cx, cy)
                     page.wait_for_timeout(150)
-                print(f"  • {t['act']:<5} @({cx:.0f},{cy:.0f}) ← {t['desc'][:38]}")
-                page.wait_for_timeout(150)
+                print(f"  • {t['act']:<5} @vision({cx:.0f},{cy:.0f}) ← {t['desc'][:38]}")
             pending = still
-            if pending:
-                print(f"  🔁 còn thiếu {len(pending)} ô → thử định vị lại: "
-                      f"{[t['desc'][:20] for t in pending]}")
         if pending:
-            print(f"  ⚠️  CUA vẫn không định vị được {len(pending)} ô sau 3 vòng")
+            print(f"  ⚠️  Còn {len(pending)} ô không điền được (cả DOM lẫn vision)")
 
-        # CUỘN XUỐNG đáy + chụp lại để thấy nút Gửi
-        print("  ⬇️  cuộn xuống tìm nút Gửi (ảnh 2)...")
-        page.mouse.wheel(0, 4000)
-        page.wait_for_timeout(800)
-        sb = _ask_boxes(adapter, _shot_b64(page),
-                        [{"id": "submit", "desc": "nút Gửi (Submit) màu xanh ở cuối form"}])
-        if sb.get("submit") and len(sb["submit"]) == 4:
-            cx, cy = _center(sb["submit"], VW, VH)
-            page.mouse.click(cx, cy)
-            print(f"  • click @({cx:.0f},{cy:.0f}) ← nút Gửi")
-        else:
-            print("  ⚠️  vẫn không thấy nút Gửi")
+        # NÚT GỬI: thử DOM trước, không thấy thì cuộn + Gemini vision
+        submitted = False
+        try:
+            sub = page.get_by_role("button").filter(has_text=re.compile(r"(?i)^\s*(gửi|submit)\s*$"))
+            if sub.count():
+                sub.first.click()
+                submitted = True
+                print("  • click nút Gửi ✓DOM")
+        except Exception:
+            pass
+        if not submitted:
+            print("  ⬇️  cuộn xuống tìm nút Gửi (vision)...")
+            page.mouse.wheel(0, 4000)
+            page.wait_for_timeout(800)
+            sb = _ask_boxes(adapter, _shot_b64(page),
+                            [{"id": "submit", "desc": "nút Gửi (Submit) màu xanh ở cuối form"}])
+            if sb.get("submit") and len(sb["submit"]) == 4:
+                cx, cy = _center(sb["submit"], VW, VH)
+                page.mouse.click(cx, cy)
+                print(f"  • click @vision({cx:.0f},{cy:.0f}) ← nút Gửi")
+            else:
+                print("  ⚠️  vẫn không thấy nút Gửi")
 
         # XÁC MINH thật: URL đổi sang /formResponse HOẶC text xác nhận đặc trưng
         ok = False
