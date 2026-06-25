@@ -73,6 +73,37 @@ def _composer_empty(text: str) -> bool:
     return (not t) or bool(_PLACEHOLDER_RE.search(t))
 
 
+def _probe(msg: str) -> str:
+    """Đoạn đặc trưng để dò tin trong khung chat: dòng có nội dung dài nhất trong vài dòng đầu."""
+    best = ""
+    for ln in msg.splitlines()[:8]:
+        ln = ln.strip().lstrip("•-📄 ").strip()
+        if len(ln) > len(best):
+            best = ln
+    return best[:30]
+
+
+def _msg_in_chat(dlg, msg: str) -> bool:
+    """Tìm đoạn đặc trưng của tin trong cây UIA NHƯNG bỏ qua ô soạn (richInput) →
+    xác nhận tin đã nằm trong KHUNG CHAT (đã gửi), không phải còn ở ô nhập."""
+    probe = _probe(msg)
+    if not probe:
+        return False
+    try:
+        for w in dlg.descendants():
+            try:
+                if w.element_info.automation_id == "richInput":
+                    continue
+                nm = w.element_info.name or ""
+            except Exception:
+                continue
+            if probe in nm and not _PLACEHOLDER_RE.search(nm):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def focus_composer(dlg, composer) -> bool:
     """Focus ô soạn tin: click vào placeholder 'tin nhắn tới ...' (đang hiển thị)."""
     # 1) tìm ĐÚNG placeholder 'tin nhắn tới' (loại 'Tin nhắn thoại'), click nó
@@ -146,12 +177,18 @@ def run(name: str, doc: str, do_send: bool = False) -> int:
     send_keys("{ENTER}")
     time.sleep(1.2)
     after = composer_text(dlg)
-    # Đã gửi nếu ô về trạng thái TRỐNG (placeholder) HOẶC nội dung vừa soạn đã biến mất.
-    head = val.strip()[:20]
-    if _composer_empty(after) or (head and head not in after):
-        print(f"✅ Đã GỬI tin nhắn cho '{name}' (ô soạn tin đã trống sau khi gửi).")
+
+    # XÁC MINH THẬT: tìm đúng đoạn tin trong KHUNG CHAT (không phải ô soạn).
+    if _msg_in_chat(dlg, msg):
+        print(f"✅ Đã GỬI tin nhắn cho '{name}' (thấy tin trong khung chat).")
         return 0
-    print(f"⛔ CHƯA chắc gửi được — ô soạn tin sau Enter vẫn còn: {after[:40]!r}. Kiểm tra Zalo.")
+    # Ô soạn vẫn còn nội dung → Enter không gửi được.
+    if not _composer_empty(after):
+        print(f"⛔ CHƯA gửi — ô soạn tin vẫn còn: {after[:40]!r}. Kiểm tra Zalo.")
+        return 2
+    # Ô đã trống nhưng KHÔNG thấy tin trong chat → rất có thể tin quá dài/ký tự lạ nên Zalo bỏ.
+    print("⚠️  Ô soạn tin đã trống nhưng KHÔNG thấy tin trong khung chat — "
+          "có thể tin quá dài nên Zalo không gửi. Hãy KIỂM TRA Zalo (cân nhắc rút gọn nội dung).")
     return 2
 
 

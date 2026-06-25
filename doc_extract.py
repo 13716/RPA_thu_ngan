@@ -79,14 +79,23 @@ def extract_dynamic(path: str) -> dict:
     return {"loai_tai_lieu": doc_type, "truong": fields}
 
 
+def _fmt_val(v) -> str:
+    """Hiển thị 1 giá trị: dict -> 'k: v; ...'; list[dict] -> nhiều dòng con; còn lại -> str."""
+    if isinstance(v, dict):
+        return "; ".join(f"{k}: {vv}" for k, vv in v.items() if vv not in (None, ""))
+    if isinstance(v, (list, tuple)):
+        if any(isinstance(x, dict) for x in v):                 # bảng hàng hoá → từng dòng
+            return "".join(f"\n   - {_fmt_val(x)}" for x in v)
+        return ", ".join(str(x) for x in v)
+    return str(v)
+
+
 def format_message(data: dict) -> str:
     """Tin nhắn nhiều dòng theo ĐÚNG nội dung tài liệu (không khuôn cố định)."""
     title = (data.get("loai_tai_lieu") or "Chứng từ").strip()
     lines = [f"📄 {title.upper()}"]
     for k, v in data["truong"].items():
-        if isinstance(v, (list, tuple)):
-            v = ", ".join(str(x) for x in v)
-        lines.append(f"• {k}: {v}")
+        lines.append(f"• {k}: {_fmt_val(v)}")
     return "\n".join(lines)
 
 
