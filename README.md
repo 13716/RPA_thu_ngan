@@ -60,7 +60,8 @@ cd D:\python\ocr_vsf\rpa_hoadon
 py -3.11 autofill.py --form "https://forms.gle/XXXX" --doc "..\...\hoadon.pdf"
 # gửi (thêm --headed để xem trình duyệt; --post để gửi bằng HTTP)
 py -3.11 autofill.py --form "https://forms.gle/XXXX" --doc "..\...\hoadon.pdf" --submit --headed
-# đợt sau cùng form → bỏ trống --form (tự dùng form cũ); --refresh nếu form bị sửa
+# đợt sau cùng form → bỏ trống --form (tự dùng form cũ). Sửa form cũ KHÔNG cần --refresh:
+# tool tự soi lại & nhận biết đổi nội dung (--refresh chỉ để ép soi ngay).
 py -3.11 autofill.py --doc "..\...\hoadon2.pdf" --submit
 ```
 

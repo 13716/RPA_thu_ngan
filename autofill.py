@@ -94,40 +94,62 @@ def _inspect_and_cache(url: str) -> dict:
     return schema
 
 
+_SCHEMA_MEMO: dict = {}    # cache trong-phiên-chạy: url -> schema (1 lần soi/URL cho cả batch)
+
+
+def _schema_sig(schema: dict) -> str:
+    """Chữ ký NỘI DUNG form: đổi khi thêm/bớt/sửa trường, đổi kiểu, đổi option, đổi số trang."""
+    parts = [str(schema.get("pages", 1)), str(schema.get("title", ""))]
+    for f in schema.get("fields", []):
+        parts.append("|".join(str(f.get(k, "")) for k in
+                              ("entry", "type", "label", "options", "row")))
+    return hashlib.md5("\n".join(parts).encode("utf-8")).hexdigest()
+
+
 def resolve_schema(arg_form: "str | None", refresh: bool = False) -> dict:
     """
-    Quyết định dùng form nào + có cần soi lại không.
-      - arg_form trống     -> dùng FORM CŨ (form gần nhất), không soi lại.
-      - arg_form == cũ     -> dùng schema đã lưu.
-      - arg_form ĐỔI       -> soi lại lấy trường mới.
-      - --refresh          -> ép soi lại.
+    Dùng form nào + tự nhận biết form ĐỔI theo NỘI DUNG (không chỉ URL).
+    Mỗi lần chạy soi lại form (rẻ: chỉ HTTP GET + parse, không API/trình duyệt) rồi so
+    chữ ký với schema đã lưu → sửa form cũ vẫn bắt được, KHỎI cần --refresh.
+    Soi lỗi (mất mạng) → dùng schema đã lưu. Trong 1 phiên/batch chỉ soi 1 lần/URL.
     """
     last = load_last_form()
     url = (arg_form or last or "").strip()
     if not url:
         raise SystemExit("⛔ Lần đầu chạy phải cung cấp --form <URL>. Các lần sau có thể bỏ trống để dùng form cũ.")
-
     if not arg_form:
         print(f"   ↩️  Không truyền --form → dùng FORM CŨ: {url}")
 
-    changed = bool(arg_form) and bool(last) and arg_form.strip() != last
-    cached = None if (refresh or changed) else load_schema(url)
-    if cached and "pages" not in cached:        # cache cũ (trước khi thêm đếm trang) -> soi lại
+    if url in _SCHEMA_MEMO and not refresh:      # đã soi trong phiên này
+        save_last_form(url)
+        return _SCHEMA_MEMO[url]
+
+    cached = load_schema(url)
+    if cached and "pages" not in cached:         # cache quá cũ (trước khi đếm trang)
         cached = None
 
-    if cached:
-        print("   ⚡ Form không đổi → dùng schema đã lưu (bỏ qua soi form).")
-        schema = cached
-    else:
-        if changed:
-            print("   🔄 Form THAY ĐỔI so với lần trước → soi lại lấy các trường mới.")
-        elif refresh:
-            print("   🔄 --refresh → soi lại form.")
-        schema = _inspect_and_cache(url)
-        print("   💾 Đã soi form và lưu schema.")
+    try:
+        fresh = _inspect_and_cache(url)          # soi lại + lưu cache
+    except Exception as e:
+        if cached:
+            print(f"   ⚠️  Soi form lỗi ({str(e)[:50]}) → dùng schema đã lưu.")
+            _SCHEMA_MEMO[url] = cached
+            save_last_form(url)
+            return cached
+        raise
 
+    if cached is None:
+        print("   💾 Soi form lần đầu — đã lưu schema.")
+    elif refresh:
+        print("   🔄 --refresh → đã soi lại form.")
+    elif _schema_sig(cached) == _schema_sig(fresh):
+        print("   ⚡ Form KHÔNG đổi (so nội dung) → schema như cũ.")
+    else:
+        print("   🔄 Form THAY ĐỔI nội dung (trường/kiểu/trang) → đã cập nhật schema.")
+
+    _SCHEMA_MEMO[url] = fresh
     save_last_form(url)
-    return schema
+    return fresh
 
 
 # ── prompt động: sinh từ chính các trường của form ────────────────────────────
