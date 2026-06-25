@@ -126,6 +126,45 @@ def _type_at(page, cx, cy, value: str) -> bool:
     return True
 
 
+def _on_page(page, item) -> bool:
+    """Câu hỏi của item có ĐANG ở trang hiện tại không (để khỏi gọi vision cho ô trang khác)."""
+    txt = (item.get("q_title") or item["label"]).strip()
+    try:
+        return page.locator("div[role='listitem']").filter(has_text=txt).count() > 0
+    except Exception:
+        return False
+
+
+def _fill_current_page(page, adapter, pending: list) -> list:
+    """Điền các target còn thiếu NẰM trên trang hiện tại: PASS1 DOM khớp nhãn → PASS2 vision
+    (chỉ ô có trên trang mà DOM trượt). Trả về danh sách target VẪN còn thiếu (ở trang khác)."""
+    from form_filler import _try_fill_field
+    still = []
+    for t in pending:                                  # PASS 1 — DOM (chính xác, không tốn Gemini)
+        if _try_fill_field(page, t["item"]):
+            print(f"  • {t['act']:<5} ✓DOM ← {t['desc'][:42]}")
+        else:
+            still.append(t)
+    here = [t for t in still if _on_page(page, t["item"])]  # PASS 2 — vision chỉ cho ô trên trang
+    if here:
+        print(f"  👁️  CUA vision: {len(here)} ô DOM trượt trên trang này...")
+        boxes = _ask_boxes(adapter, _shot_b64(page), here)
+        for t in list(here):
+            box = boxes.get(t["id"])
+            if not box or len(box) != 4:
+                continue
+            cx, cy = _center(box, VW, VH)
+            if t["act"] == "type":
+                if not _type_at(page, cx, cy, str(t["value"])):
+                    continue
+            else:
+                page.mouse.click(cx, cy)
+                page.wait_for_timeout(150)
+            print(f"  • {t['act']:<5} @vision({cx:.0f},{cy:.0f}) ← {t['desc'][:38]}")
+            still.remove(t)
+    return still
+
+
 def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
                  shot_dir: Path = None) -> dict:
     from playwright.sync_api import sync_playwright
@@ -141,54 +180,23 @@ def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
         page.goto(form_url, wait_until="domcontentloaded")
         page.wait_for_timeout(1500)
 
-        # ── HYBRID: DOM khớp-nhãn lo điền (CHÍNH XÁC), Gemini vision đỡ ô DOM không thấy ──
-        from form_filler import _try_fill_field
+        # ── HYBRID + ĐA TRANG: mỗi trang điền (DOM→vision) rồi bấm 'Tiếp' → ... → 'Gửi' ──
+        from form_filler import _find_nav
 
-        # PASS 1 — DOM khớp nhãn (không tốn Gemini); chống đặt nhầm giá trị
-        pending = []
-        for t in targets:
-            if _try_fill_field(page, t["item"]):
-                print(f"  • {t['act']:<5} ✓DOM ← {t['desc'][:42]}")
-            else:
-                pending.append(t)
-
-        # PASS 2.. — chỉ ô DOM KHÔNG thấy mới nhờ Gemini vision (toạ độ pixel)
-        for attempt in range(1, 4):
-            if not pending:
+        pending = list(targets)
+        for pg in range(1, 21):                        # tối đa 20 trang
+            pending = _fill_current_page(page, adapter, pending)
+            submit_b, next_b = _find_nav(page)         # nav qua DOM (đáng tin trên Google Form)
+            if submit_b:
+                submit_b.click()
                 break
-            print(f"  👁️  CUA vision: Gemini định vị {len(pending)} ô DOM không thấy (vòng {attempt})...")
-            boxes = _ask_boxes(adapter, _shot_b64(page), pending)
-            still = []
-            for t in pending:
-                box = boxes.get(t["id"])
-                if not box or len(box) != 4:
-                    still.append(t)
-                    continue
-                cx, cy = _center(box, VW, VH)
-                if t["act"] == "type":
-                    if not _type_at(page, cx, cy, str(t["value"])):
-                        still.append(t)
-                        continue
-                else:
-                    page.mouse.click(cx, cy)
-                    page.wait_for_timeout(150)
-                print(f"  • {t['act']:<5} @vision({cx:.0f},{cy:.0f}) ← {t['desc'][:38]}")
-            pending = still
-        if pending:
-            print(f"  ⚠️  Còn {len(pending)} ô không điền được (cả DOM lẫn vision)")
-
-        # NÚT GỬI: thử DOM trước, không thấy thì cuộn + Gemini vision
-        submitted = False
-        try:
-            sub = page.get_by_role("button").filter(has_text=re.compile(r"(?i)^\s*(gửi|submit)\s*$"))
-            if sub.count():
-                sub.first.click()
-                submitted = True
-                print("  • click nút Gửi ✓DOM")
-        except Exception:
-            pass
-        if not submitted:
-            print("  ⬇️  cuộn xuống tìm nút Gửi (vision)...")
+            if next_b:
+                print(f"  ➡️  sang trang {pg + 1} (bấm Tiếp)")
+                next_b.click()
+                page.wait_for_timeout(900)
+                continue
+            # không thấy Tiếp/Gửi qua DOM (form 1 trang, DOM gãy) → vision tìm nút Gửi
+            print("  ⬇️  không thấy Tiếp/Gửi (DOM) → cuộn + vision tìm Gửi...")
             page.mouse.wheel(0, 4000)
             page.wait_for_timeout(800)
             sb = _ask_boxes(adapter, _shot_b64(page),
@@ -197,8 +205,9 @@ def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
                 cx, cy = _center(sb["submit"], VW, VH)
                 page.mouse.click(cx, cy)
                 print(f"  • click @vision({cx:.0f},{cy:.0f}) ← nút Gửi")
-            else:
-                print("  ⚠️  vẫn không thấy nút Gửi")
+            break
+        if pending:
+            print(f"  ⚠️  Còn {len(pending)} ô chưa điền (không tìm thấy ở trang nào)")
 
         # XÁC MINH thật: URL đổi sang /formResponse HOẶC text xác nhận đặc trưng
         ok = False
