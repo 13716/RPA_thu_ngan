@@ -426,7 +426,7 @@ def _form_submit_one(schema, items, args) -> int:
     shot = re.sub(r"[^0-9A-Za-z_-]", "_", (items[0]["value"] or "form"))[:40]
     res = form_filler.fill_and_submit_browser(
         schema["view_url"], items, headless=not args.headed,
-        slow_mo=700 if args.headed else 0, shot_name=shot,
+        slow_mo=150 if args.headed else 0, shot_name=shot,   # 150ms: vẫn nhìn được nhưng nhanh ~4-5×
     )
     if not res["ok"]:
         print(f"\n⚠️  Playwright thất bại ({res['error'][:60]}) → FALLBACK Bậc 4 CUA Gemini...")
