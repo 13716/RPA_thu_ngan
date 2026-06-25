@@ -61,7 +61,9 @@ def _try_fill_field(page, item) -> bool:
     if val in (None, "", []):
         return True
     label, t = item["label"], item["type"]
-    q = page.locator("div[role='listitem']").filter(has_text=label)   # ô câu hỏi theo nhãn
+    # Grid: định vị theo TIÊU ĐỀ câu hỏi (nhiều hàng dùng chung 1 listitem); còn lại theo nhãn.
+    loc_text = item.get("q_title") or label
+    q = page.locator("div[role='listitem']").filter(has_text=loc_text)  # ô câu hỏi
     if q.count() == 0:
         return False                                                  # không ở trang này
     q = q.first
@@ -78,8 +80,22 @@ def _try_fill_field(page, item) -> bool:
                 ti = q.locator(f'input[aria-label="{lbl}"]')
                 if ti.count():
                     ti.first.fill(v)
-        elif t in ("radio", "scale"):
+        elif t in ("radio", "scale", "rating"):
+            # rating (sao 1–5) cũng là radio có aria-label = số điểm
             q.get_by_role("radio", name=str(val), exact=True).click()
+        elif t == "grid":
+            # chọn radio theo (cột = value) trong đúng HÀNG (data-value=cột, aria-label chứa nhãn hàng)
+            row = item.get("row", "")
+            radios = q.get_by_role("radio")
+            picked = False
+            for i in range(radios.count()):
+                r = radios.nth(i)
+                if (r.get_attribute("data-value") or "") == str(val) \
+                        and row in (r.get_attribute("aria-label") or ""):
+                    r.click(); picked = True
+                    break
+            if not picked:
+                return False
         elif t == "dropdown":
             q.get_by_role("listbox").first.click()
             page.get_by_role("option", name=str(val), exact=True).first.click()

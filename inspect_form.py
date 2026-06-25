@@ -21,6 +21,7 @@ import urllib.request
 TYPE_MAP = {
     0: "text", 1: "paragraph", 2: "radio", 3: "dropdown",
     4: "checkbox", 5: "scale", 7: "grid", 9: "date", 10: "time", 13: "file",
+    18: "rating",
 }
 
 
@@ -59,12 +60,20 @@ def fetch_form(url: str):
             eid = f"entry.{e[0]}"
             required = bool(e[2]) if len(e) > 2 else False
             options = [o[0] for o in e[1]] if e[1] else None
+            label = name
+            extra = {}
+            if type_code == 7:                      # GRID: mỗi entry = 1 hàng
+                row = e[3][0] if len(e) > 3 and isinstance(e[3], list) and e[3] else ""
+                if row:
+                    label = f"{name} — {row}"        # nhãn duy nhất từng hàng
+                extra = {"q_title": name, "row": row}
             out.append({
-                "label": name,
+                "label": label,
                 "type": TYPE_MAP.get(type_code, f"code{type_code}"),
                 "entry": eid,
                 "required": required,
                 "options": options,
+                **extra,
             })
     return title, out, view_url, pages
 

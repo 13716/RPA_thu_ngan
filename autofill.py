@@ -26,6 +26,7 @@ import json
 import hashlib
 import argparse
 import unicodedata
+from datetime import date
 from pathlib import Path
 
 from inspect_form import fetch_form
@@ -41,7 +42,8 @@ def _fid(f: dict) -> str:
     return f.get("id") or f.get("entry") or f["label"]
 
 # các kiểu trường tool biết điền
-SUPPORTED = {"text", "paragraph", "date", "radio", "dropdown", "checkbox", "scale"}
+SUPPORTED = {"text", "paragraph", "date", "radio", "dropdown", "checkbox", "scale",
+             "rating", "grid"}
 
 # nơi lưu schema form đã soi (đỡ phải soi lại mỗi lần)
 CACHE_DIR = Path(__file__).resolve().parent / "form_cache"
@@ -147,16 +149,25 @@ def build_prompt(fields: "list[dict]", doc_text: "str | None", multi: bool = Fal
         )
     else:
         out_spec = "Hãy TRÍCH XUẤT giá trị cho đúng các trường dưới đây và CHỈ trả về JSON dạng {id: giá_trị}.\n"
+    today = date.today().strftime("%d/%m/%Y")
     p = (
         "Bạn nhận một chứng từ (hoá đơn / biểu mẫu / giấy tờ). " + out_spec +
+        f"HÔM NAY là {today} (DD/MM/YYYY) — dùng để SUY LUẬN các trường theo thời gian.\n"
         "Trường nào không có thông tin LIÊN QUAN trong chứng từ thì để null.\n\n"
         f"CÁC TRƯỜNG CẦN TRÍCH:\n{schema}\n\n"
         "Quy tắc:\n"
         "- Chép chính xác con số (không tự tính lại, không làm tròn); ngày theo DD/MM/YYYY; "
         "trường có lựa chọn phải trả đúng một trong các option cho sẵn; giữ nguyên dấu tiếng Việt.\n"
+        "- Trường cần SUY LUẬN theo thời gian thì PHẢI tính, KHÔNG để null nếu đủ dữ kiện:\n"
+        "    • tuổi = số năm từ NGÀY SINH đến HÔM NAY (tuổi tròn: chưa tới sinh nhật năm nay thì trừ 1).\n"
+        "    • còn hạn / hết hạn / hiệu lực = so NGÀY HẾT HẠN (hoặc giá trị đến) trong chứng từ với HÔM NAY; "
+        "nếu trường có option (vd 'còn hạn'/'đã hết hạn') hãy chọn ĐÚNG option theo kết quả so sánh.\n"
+        "    • số ngày còn lại / đã qua = chênh lệch ngày so với HÔM NAY.\n"
+        "  Đây KHÔNG phải bịa — là tính toán từ dữ kiện CÓ THẬT trong chứng từ + ngày hôm nay.\n"
         "- Với trường MÔ TẢ/DIỄN GIẢI/NỘI DUNG/HÀNG HOÁ–DỊCH VỤ: nếu chứng từ không có ô ghi sẵn, "
         "hãy TỔNG HỢP từ BẢNG KÊ hàng hoá/dịch vụ — liệt kê tên các mặt hàng/dịch vụ, nối bằng '; '. "
-        "Chỉ để null khi thật sự không có dòng hàng nào. KHÔNG bịa thông tin không có trong chứng từ.\n"
+        "Chỉ để null khi thật sự không có dòng hàng nào. KHÔNG bịa DỮ KIỆN THÔ không có trong chứng từ "
+        "(nhưng ĐƯỢC suy luận trường phái sinh như trên).\n"
     )
     if doc_text is not None:
         p += f"\nNỘI DUNG VĂN BẢN CHỨNG TỪ:\n----------\n{doc_text}\n"
@@ -204,7 +215,7 @@ def normalize_value(val, field: dict):
     if t == "date":
         nd = normalize_date(val)
         return nd, (None if nd else f"ngày '{val}' không đọc được")
-    if t in ("radio", "dropdown", "scale", "checkbox"):
+    if t in ("radio", "dropdown", "scale", "checkbox", "rating", "grid"):
         opts = field.get("options") or []
         if t == "checkbox" and isinstance(val, list):
             matched = [_match_option(v, opts) for v in val]
