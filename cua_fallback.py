@@ -86,6 +86,46 @@ def _center(box, w, h):
     return cx, cy
 
 
+def _input_focused(page) -> bool:
+    """Con trỏ đang ở 1 ô GÕ ĐƯỢC (input/textarea/contenteditable) chưa?"""
+    try:
+        return bool(page.evaluate(
+            "()=>{const a=document.activeElement;return !!a&&(a.tagName==='INPUT'"
+            "||a.tagName==='TEXTAREA'||a.getAttribute('contenteditable')==='true');}"))
+    except Exception:
+        return False
+
+
+def _focus_field_near(page, cx, cy) -> bool:
+    """Gemini hay chỉ lệch lên dòng chữ câu hỏi → SNAP vào đúng ô input gần điểm đó
+    (tìm trong listitem chứa điểm). Trả True nếu đã focus được 1 ô gõ được."""
+    js = r"""([x,y])=>{
+      const isIn=e=>e&&(e.tagName==='INPUT'||e.tagName==='TEXTAREA'||(e.getAttribute&&e.getAttribute('contenteditable')==='true'));
+      let el=document.elementFromPoint(x,y);
+      if(isIn(el)){el.focus();return true;}
+      let li=(el&&el.closest)?el.closest("div[role='listitem']"):null;
+      let inp=(li||document).querySelector("input:not([type=hidden]):not([type=radio]):not([type=checkbox]),textarea,div[contenteditable='true']");
+      if(inp){inp.scrollIntoView({block:'center'});inp.focus();return true;}
+      return false;
+    }"""
+    try:
+        return bool(page.evaluate(js, [cx, cy]))
+    except Exception:
+        return False
+
+
+def _type_at(page, cx, cy, value: str) -> bool:
+    """Click toạ độ Gemini → đảm bảo focus ĐÚNG ô input (snap nếu trượt) → gõ.
+    Trả True nếu thật sự gõ được vào 1 ô."""
+    page.mouse.click(cx, cy)
+    page.wait_for_timeout(150)
+    if not _input_focused(page) and not _focus_field_near(page, cx, cy):
+        return False
+    page.keyboard.press("Control+A")
+    page.keyboard.type(value, delay=20)
+    return True
+
+
 def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
                  shot_dir: Path = None) -> dict:
     from playwright.sync_api import sync_playwright
@@ -115,13 +155,16 @@ def cua_fill_web(form_url: str, items: list, *, headless: bool = False,
                     still.append(t)
                     continue
                 cx, cy = _center(box, VW, VH)
-                page.mouse.click(cx, cy)
-                page.wait_for_timeout(250)
                 if t["act"] == "type":
-                    page.keyboard.press("Control+A")
-                    page.keyboard.type(str(t["value"]), delay=20)
+                    if not _type_at(page, cx, cy, str(t["value"])):
+                        print(f"  • type  @({cx:.0f},{cy:.0f}) ⚠️ không bắt được ô input → thử lại vòng sau")
+                        still.append(t)
+                        continue
+                else:
+                    page.mouse.click(cx, cy)        # radio/lựa chọn: chấm tròn dễ trúng
+                    page.wait_for_timeout(150)
                 print(f"  • {t['act']:<5} @({cx:.0f},{cy:.0f}) ← {t['desc'][:38]}")
-                page.wait_for_timeout(200)
+                page.wait_for_timeout(150)
             pending = still
             if pending:
                 print(f"  🔁 còn thiếu {len(pending)} ô → thử định vị lại: "
