@@ -76,8 +76,8 @@ def inspect_web(url: str, *, headless: bool = True, timeout: int = 30000) -> lis
 
 
 def fill_web(url: str, items: list, *, headless: bool = False, submit: bool = False,
-             submit_text: str = "Tra cứu", keep_open_secs: int = 0,
-             shot_dir=None) -> dict:
+             submit_text: str = r"tra cứu|tìm kiếm|gửi|tra cuu|submit|search",
+             keep_open_secs: int = 0, shot_dir=None) -> dict:
     """Điền các item (đã có 'value') vào trang web theo selector ('entry').
     submit=False (mặc định): chỉ điền, KHÔNG bấm nút (để người giải captcha). """
     from playwright.sync_api import sync_playwright

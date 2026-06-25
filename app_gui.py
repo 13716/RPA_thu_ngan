@@ -17,10 +17,11 @@ import autofill
 import desktop_profiles
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TARGETS = [("Google Form", "form"), ("Excel", "excel"), ("Access", "access"),
-           ("App desktop", "profile"), ("Zalo", "zalo")]
+TARGETS = [("Google Form", "form"), ("Trang web", "web"), ("Excel", "excel"),
+           ("Access", "access"), ("App desktop", "profile"), ("Zalo", "zalo")]
 EXTRA = {  # nhãn + giá trị mặc định cho ô tham số phụ theo đích
     "form":    ("Form URL (bỏ trống = form cũ)", ""),
+    "web":     ("URL trang web (điền xong tự giải captcha + bấm nút)", ""),
     "excel":   ("File Excel", os.path.join(HERE, "bao_cao.xlsx")),
     "access":  ("(Access không cần tham số)", ""),
     "profile": ("Chọn app (profiles/*.json) — thêm app = thêm 1 JSON", ""),
@@ -33,10 +34,12 @@ def build_args(target, doc, extra, submit, headed, watch=False, post=False) -> t
         doc=doc, submit=submit, headed=headed,
         form=None, post=post, refresh=False, cua=False,
         excel=None, sheet=None, header_row=1, watch=watch,
-        access=False, app=False, profile=None, zalo=False, to=None,
+        access=False, app=False, profile=None, zalo=False, to=None, web=None,
     )
     if target == "form":
         a.form = extra or None
+    elif target == "web":
+        a.web = extra or None
     elif target == "excel":
         a.excel = extra or os.path.join(HERE, "bao_cao.xlsx")
     elif target == "access":
@@ -50,6 +53,8 @@ def build_args(target, doc, extra, submit, headed, watch=False, post=False) -> t
 
 
 def dispatch(a) -> int:
+    if getattr(a, "web", None):
+        return autofill.run_web(a)
     if a.profile:
         return autofill.run_profile(a)
     if a.zalo:

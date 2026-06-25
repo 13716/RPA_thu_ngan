@@ -517,6 +517,35 @@ def run_excel(args) -> int:
     return _run_records(args, fields, do_one, block_on_issues=False)
 
 
+def run_web(args) -> int:
+    """Đích = TRANG WEB BẤT KỲ (không phải Google Form). Soi DOM thật → điền theo selector.
+    Trang có captcha thì chỉ điền, giữ trình duyệt cho người tự giải + bấm nút."""
+    import web_target
+    url = args.web
+    print(f"\n🌐 Trang web: {url}")
+    fields = web_target.inspect_web(url, headless=not args.headed)
+    if not fields:
+        print("⛔ Không soi được ô nhập nào trên trang (JS chưa tải xong? sai URL?).")
+        return 1
+    print(f"   {len(fields)} ô nhập:")
+    for f in fields:
+        print(f"     [{f['type']}] {f['entry']}  {f['label'][:36]!r}")
+
+    def do_one(items):
+        res = web_target.fill_web(url, items, headless=not args.headed,
+                                  submit=args.submit,
+                                  keep_open_secs=25 if args.headed else 0)
+        if not res["ok"]:
+            print("⛔ Không điền được ô nào (selector đổi? trang chưa tải?).")
+            return 1
+        if not args.submit:
+            print("💡 Đã điền (chưa bấm nút). Tự giải captcha + bấm gửi trên trình duyệt, "
+                  "hoặc thêm --submit để tự bấm (KHÔNG vượt được captcha).")
+        return 0
+    # web: không chặn maker-checker (điền được ô nào hay ô đó; người kiểm tra)
+    return _run_records(args, fields, do_one, block_on_issues=False)
+
+
 EPILOG = """\
 VÍ DỤ (mặc định CHỈ trích xuất xem trước; thêm --submit mới thực sự ghi/gửi):
 
@@ -549,6 +578,7 @@ def main() -> int:
     g.add_argument("--app", action="store_true", help="App desktop qua UIA (app không có API, vd OH)")
     g.add_argument("--profile", default=None, help="Điền theo profile app trong profiles/<tên>.json (đa-app)")
     g.add_argument("--zalo", action="store_true", help="Gửi hoá đơn vào chat Zalo của người --to")
+    g.add_argument("--web", default=None, help="URL trang web bất kỳ (soi DOM thật rồi điền)")
 
     f = ap.add_argument_group("Tuỳ chọn theo đích")
     f.add_argument("--post", action="store_true", help="(Form) gửi HTTP POST thay vì trình duyệt")
@@ -565,6 +595,8 @@ def main() -> int:
                     help="Thực sự ghi/gửi (mặc định chỉ trích xuất xem trước)")
     args = ap.parse_args()
 
+    if args.web:
+        return run_web(args)
     if args.profile:
         return run_profile(args)
     if args.zalo:

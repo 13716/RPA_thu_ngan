@@ -26,11 +26,12 @@ rpa_hoadon/
 > tính đường dẫn `.env`/engine OCR theo `HERE.parent`. Tách ra sẽ phá mọi import +
 > lệnh README. Layout phẳng là đúng cho bộ "script chạy trực tiếp dùng chung module".
 
-## 1 lệnh — 5 đích (`autofill.py`)
+## 1 lệnh — 6 đích (`autofill.py`)
 
 | Đích | Cờ | Cơ chế | Bậc |
 |------|-----|--------|-----|
 | Google Form | `--form <URL>` | Playwright / HTTP POST | 1–3 |
+| Trang web bất kỳ | `--web <URL>` | Playwright soi DOM thật (`web_target`) — captcha thì người giải | 3 |
 | Excel | `--excel <file>` | openpyxl / COM (`--watch`) | 1 |
 | Microsoft Access | `--access` | COM | 1 |
 | App desktop (OH) | `--app` | pywinauto-UIA | 3 |
