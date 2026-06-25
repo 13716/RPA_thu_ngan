@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RPA Hoá đơn — Flowchart kiến trúc tool (đa đích + fallback CUA)</title>
+<title>RPA Hoá đơn — Flowchart kiến trúc tool (đa đích + multi-record + fallback CUA)</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
-  :root{--purple:#5645d4;--green:#0d9488;--blue:#2563eb;--cua:#7c3aed;--bg:#fafafa;--ink:#1a1a2e;--mut:#6b7280;--bd:#e5e7eb;}
+  :root{--purple:#5645d4;--green:#0d9488;--blue:#2563eb;--cua:#7c3aed;--gate:#b45309;--bg:#fafafa;--ink:#1a1a2e;--mut:#6b7280;--bd:#e5e7eb;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--ink);padding:28px 32px;max-width:1100px;margin:0 auto;}
   h1{font-size:22px;font-weight:800;}
@@ -20,70 +20,90 @@
 </style>
 </head>
 <body>
-  <h1>RPA Hoá đơn — Kiến trúc tool đa đích + fallback CUA
-    <small>Một nguồn OCR → điền vào Browser / Excel / Access / App desktop (OH) / Zalo. Bậc tất định trước, CUA Gemini đỡ khi gãy.</small>
+  <h1>RPA Hoá đơn — Kiến trúc tool đa đích + multi-record + fallback CUA
+    <small>Một nguồn (ảnh/PDF/Excel/CSV/Word) → tách N bản ghi → điền vào Form / Excel / Access / App desktop (OH) / Zalo. Bậc tất định trước, CUA Gemini đỡ khi gãy.</small>
   </h1>
 
   <div class="legend">
-    <span class="pill" style="background:var(--green)">🟢 Bậc 1 — API/COM (nhanh, ổn định)</span>
+    <span class="pill" style="background:var(--green)">🟢 Bậc 1 — API/COM/POST (nhanh, ổn định)</span>
     <span class="pill" style="background:var(--blue)">🔵 Bậc 3 — UI tất định (Playwright/UIA)</span>
     <span class="pill" style="background:var(--cua)">🟣 Bậc 4 — CUA Gemini (fallback)</span>
+    <span class="pill" style="background:var(--gate)">✋ Maker-checker — gác trước submit</span>
     <span class="pill" style="background:#e65100">⚠️ Escalate — người</span>
   </div>
 
   <div class="mermaid">
 flowchart TD
-  A([📄 Chứng từ: ảnh / PDF]) --> B[🔍 OCR + trích xuất theo schema]
-  B --> C[📋 dict trường: số HĐ · ngày · NCC · tiền · thuế...]
-  C --> D{Đích là gì?}
+  A([📄 Chứng từ: ảnh · PDF · Excel · CSV · Word · text]) --> RD[📥 doc_reader<br/>file dữ liệu &amp; PDF điện tử → text · ảnh/scan → OCR]
+  RD --> MR{Bảng CSV/Excel<br/>&gt;1 dòng?}
+  MR -->|Có| NREC[📦 Tách N bản ghi<br/>mỗi dòng = 1 người / hoá đơn]
+  MR -->|Không| ONE[1 bản ghi]
+  NREC --> EX
+  ONE --> EX
+
+  EX[🔍 LLM trích theo SCHEMA của đích<br/>+ suy luận tuổi / còn-hạn theo NGÀY HÔM NAY] --> MC{✋ Maker-checker TRƯỚC submit<br/>trường BẮT BUỘC đủ &amp; hợp lệ?}
+  MC -->|Thiếu / sai| ESC
+  MC -->|OK · trường tùy chọn trống vẫn cho| D{Đích là gì?}
 
   D -->|Excel / Access| L1G[🟢 Bậc 1 — API/COM<br/>openpyxl · Access COM]
-  D -->|Google Form| FRM{Có endpoint POST?}
+  D -->|Google Form| FRM{Gửi POST?}
   D -->|App desktop OH / Zalo| DSK{Có API? SOAP/COM}
 
-  FRM -->|Có| L1P[🟢 Bậc 1 — HTTP POST]
-  FRM -->|Không| PW[🔵 Bậc 3 — Playwright DOM]
+  FRM -->|Có| L1P[🟢 Bậc 1 — HTTP POST<br/>pageHistory đa trang]
+  FRM -->|Không| PW[🔵 Bậc 3 — Playwright đa trang<br/>text·chọn·ngày+giờ·rating·grid]
   PW --> PWk{Thành công?}
   PWk -->|Có| V
   PWk -->|DOM đổi / selector gãy| CUA
 
   DSK -->|Có| L1S[🟢 Bậc 1 — gọi SOAP/COM]
   DSK -->|Không| UIA{Phơi cây UIA?}
-  UIA -->|Có| PU[🔵 Bậc 3 — pywinauto<br/>SetValue / Invoke]
+  UIA -->|Có| PU[🔵 Bậc 3 — pywinauto UIA<br/>SetValue / clipboard]
   UIA -->|Electron/Citrix/đổi layout| CUA
   PU --> PUk{Thành công?}
   PUk -->|Có| V
   PUk -->|UIA gãy| CUA
 
-  CUA[🟣 Bậc 4 — CUA Gemini<br/>nhìn màn hình · click toạ độ]
+  CUA[🟣 Bậc 4 — CUA Gemini<br/>web: ĐÃ CÓ ·-· desktop: TODO]
 
   L1G --> V
   L1P --> V
   L1S --> V
   CUA --> V
 
-  V[✅ Verification maker-checker<br/>đọc lại / đối chiếu nguồn] --> VR{Khớp nguồn?}
-  VR -->|Đúng| OK([🎉 Hoàn tất + log/screenshot])
-  VR -->|Sai / fail 3 lần| ESC[⚠️ Escalate — người xử lý]
-  ESC -.->|thử lại bậc khác| D
+  V[✅ Verification SAU điền<br/>đọc lại · URL formResponse · khung chat Zalo] --> VR{Khớp / đã ghi?}
+  VR -->|Đúng| OK([🎉 Hoàn tất + screenshot/log])
+  VR -->|Sai / fail| ESC[⚠️ Escalate — người xử lý]
+  OK -.->|bản ghi kế tiếp trong file| EX
+  ESC -.->|thử bậc khác / bản ghi kế| D
 
   classDef api fill:#d1faf4,stroke:#0d9488,color:#0f5e57;
   classDef det fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
   classDef cua fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+  classDef gate fill:#fef3c7,stroke:#b45309,color:#7c2d12;
   classDef esc fill:#fff7ed,stroke:#e65100,color:#9a3412;
   class L1G,L1P,L1S api;
   class PW,PU det;
   class CUA cua;
+  class MC gate;
   class ESC esc;
   </div>
 
   <div class="note">
-    <b>Nguyên tắc:</b> mỗi đích thử <b>bậc thấp trước</b> (có API → Bậc 1; không thì UI tất định Bậc 3),
-    chỉ <b>rơi xuống CUA Gemini (Bậc 4)</b> khi bậc tất định <b>gãy</b> — DOM đổi, app không phơi UIA (Electron/Citrix),
-    hoặc app đổi layout sau nâng cấp. <b>Verification (maker-checker)</b> gác mọi nhánh: đọc lại giá trị/đối chiếu nguồn;
-    lệch hoặc fail 3 lần thì <b>escalate cho người</b> (và có thể thử lại bằng bậc khác). Đã hiện thực: <code>--form</code>,
-    <code>--excel</code>, <code>--access</code>, <code>--app</code>, <code>--zalo</code>. <b>Cần làm:</b> nhánh CUA Gemini
-    (browser-use cho web · Gemini computer-use cho desktop) — hiện là điểm fallback trong thiết kế.
+    <b>Đầu vào đa định dạng:</b> <code>doc_reader</code> đọc ảnh, PDF (điện tử lấy text · scan thì OCR),
+    <b>Excel / CSV / Word / text</b> (đọc thẳng thành bảng/markdown). <b>Multi-record:</b> bảng CSV/Excel
+    nhiều dòng → tách <b>N bản ghi</b>, lặp điền/gửi từng cái (Form = N lần submit, Excel = N dòng...).
+    <b>Suy luận:</b> prompt nhúng <b>ngày hôm nay</b> nên tính được tuổi (từ ngày sinh) và còn-hạn/hết-hạn
+    (so ngày hết hạn) — chọn đúng option nếu là radio.<br/>
+    <b>Hai lớp kiểm:</b> ✋ <b>maker-checker TRƯỚC submit</b> chặn nếu trường <b>bắt buộc</b> trống/sai
+    (trường tùy chọn trống vẫn cho); ✅ <b>verification SAU điền</b> đọc lại / chờ URL <code>formResponse</code> /
+    dò tin trong khung chat Zalo. Sai hoặc fail → <b>escalate cho người</b>.<br/>
+    <b>Thang bậc:</b> mỗi đích thử <b>bậc thấp trước</b> (API/COM/POST → Bậc 1; UI tất định → Bậc 3),
+    chỉ rơi xuống <b>CUA Gemini (Bậc 4)</b> khi bậc tất định gãy. Playwright hỗ trợ form <b>đa trang</b>
+    (tới 20) + kiểu <b>text/paragraph/radio/dropdown/checkbox/scale/date+giờ/rating(sao)/grid</b>;
+    schema tự nhận biết form <b>đổi nội dung</b> (khỏi <code>--refresh</code>).
+    <b>Đã hiện thực:</b> <code>--form</code>, <code>--excel</code>, <code>--access</code>,
+    <code>--app</code>, <code>--profile</code>, <code>--zalo</code>, <code>--post</code>, <code>--cua</code> (web).
+    <b>Còn lại:</b> CUA desktop (Gemini computer-use).
   </div>
 </body>
 </html>
