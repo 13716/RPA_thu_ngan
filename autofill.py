@@ -534,7 +534,7 @@ def run_web(args) -> int:
     def do_one(items):
         res = web_target.fill_web(url, items, headless=not args.headed,
                                   submit=args.submit,
-                                  keep_open_secs=25 if args.headed else 0)
+                                  keep_open_secs=600 if args.headed else 0)  # chờ tới khi đóng tab (trần 10')
         if not res["ok"]:
             print("⛔ Không điền được ô nào (selector đổi? trang chưa tải?).")
             return 1

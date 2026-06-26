@@ -121,9 +121,18 @@ def fill_web(url: str, items: list, *, headless: bool = False, submit: bool = Fa
             except Exception as e:
                 print(f"  ⚠️  không bấm được nút '{submit_text}': {str(e)[:50]}")
         if keep_open_secs:
-            print(f"  ⏳ giữ trình duyệt {keep_open_secs}s (tự giải captcha + bấm nút)...")
-            pg.wait_for_timeout(keep_open_secs * 1000)
-        b.close()
+            mins = max(1, keep_open_secs // 60)
+            print(f"  ⏳ Trình duyệt đang mở — tự giải captcha, bấm nút, đọc kết quả. "
+                  f"ĐÓNG tab/cửa sổ khi xong (tự kết thúc; tối đa {mins} phút).")
+            try:
+                pg.wait_for_event("close", timeout=keep_open_secs * 1000)  # chờ tới khi NGƯỜI đóng
+                print("  ✓ Đã đóng trình duyệt — kết thúc.")
+            except Exception:
+                print("  ⏱ Hết thời gian giữ — tự đóng.")
+        try:
+            b.close()
+        except Exception:
+            pass
     return {"ok": bool(filled), "filled": filled, "screenshot": str(path)}
 
 
