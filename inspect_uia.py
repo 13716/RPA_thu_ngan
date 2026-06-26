@@ -58,6 +58,52 @@ def _elevation_hint(err: Exception) -> str:
     return "Soi lỗi: " + str(err)[:180]
 
 
+# pattern UIA -> thuộc tính iface của pywinauto (truy cập lỗi = không hỗ trợ pattern đó)
+_PATTERNS = [
+    ("Value", "iface_value"), ("Toggle", "iface_toggle"), ("Invoke", "iface_invoke"),
+    ("ExpandCollapse", "iface_expand_collapse"), ("Selection", "iface_selection"),
+    ("SelectionItem", "iface_selection_item"), ("RangeValue", "iface_range_value"),
+    ("Grid", "iface_grid"), ("GridItem", "iface_grid_item"), ("Table", "iface_table"),
+    ("Text", "iface_text"), ("Scroll", "iface_scroll"), ("Window", "iface_window"),
+]
+_CORE_PATTERNS = {"Value", "Toggle", "Invoke", "ExpandCollapse", "SelectionItem"}
+
+
+def supported_patterns(ctrl, full: bool = True) -> "list[str]":
+    """Các UIA pattern control HỖ TRỢ (Value/Toggle/Invoke/Grid…) → biết tương tác kiểu nào.
+    full=False chỉ dò nhóm lõi (nhanh, cho soi GUI)."""
+    out = []
+    for name, attr in _PATTERNS:
+        if not full and name not in _CORE_PATTERNS:
+            continue
+        try:
+            if getattr(ctrl, attr) is not None:
+                out.append(name)
+        except Exception:
+            pass
+    return out
+
+
+def _key_value(ctrl) -> str:
+    """Giá trị hiện tại để xem nhanh (Value / Toggle / RangeValue)."""
+    try:
+        v = ctrl.iface_value.CurrentValue
+        if v not in (None, ""):
+            return f"value={v!r}"
+    except Exception:
+        pass
+    try:
+        return f"toggle={int(ctrl.iface_toggle.CurrentToggleState)}"
+    except Exception:
+        pass
+    try:
+        rv = ctrl.iface_range_value
+        return f"range={rv.CurrentValue}[{rv.CurrentMinimum}..{rv.CurrentMaximum}]"
+    except Exception:
+        pass
+    return ""
+
+
 def collect_controls(title: str) -> "tuple[str, list[dict]]":
     """Soi 1 cửa sổ → (tiêu đề thật, danh sách control). Bắt MỌI control tương tác HOẶC có
     auto_id (đỡ sót Hyperlink/Group-có-id như richInput của Zalo). Kèm control_type + index
@@ -95,6 +141,7 @@ def collect_controls(title: str) -> "tuple[str, list[dict]]":
             "control_type": ct,                        # locator dự phòng
             "index": idx,                              # found_index theo control_type
             "value": has_value,
+            "patterns": supported_patterns(ctrl, full=False),   # tương tác kiểu nào
         })
     return win.window_text(), rows
 
@@ -114,17 +161,20 @@ def inspect(title: str, show_all: bool = False):
     print(f"\n🪟 Cửa sổ: {win.window_text()}\n")
 
     if show_all:
-        # In MỌI control (không lọc) — để tìm ô soạn tin / control lạ
-        print(f"{'#':<4}{'TYPE':<16}{'VIS':<4}{'AUTO_ID':<26}NAME")
-        print("-" * 90)
+        # In MỌI control + PATTERN hỗ trợ + giá trị hiện tại (giàu như UIA walker)
+        print(f"{'#':<4}{'TYPE':<14}{'VIS':<4}{'AUTO_ID':<22}{'NAME':<26}{'PATTERNS':<34}VALUE")
+        print("-" * 130)
         for i, ctrl in enumerate(win.descendants(), 1):
             info = ctrl.element_info
             try:
                 vis = "Y" if ctrl.is_visible() else "."
             except Exception:
                 vis = "?"
-            print(f"{i:<4}{str(info.control_type)[:15]:<16}{vis:<4}"
-                  f"{(info.automation_id or '')[:25]:<26}{(info.name or '')[:40]}")
+            pats = ",".join(supported_patterns(ctrl))      # đầy đủ pattern
+            kv = _key_value(ctrl)
+            print(f"{i:<4}{str(info.control_type)[:13]:<14}{vis:<4}"
+                  f"{(info.automation_id or '')[:21]:<22}{(info.name or '')[:25]:<26}"
+                  f"{pats[:33]:<34}{kv[:40]}")
         return
 
     print(f"{'#':<3}{'TYPE':<11}{'VALUE?':<7}{'AUTO_ID':<24}NAME")

@@ -221,9 +221,9 @@ class App:
         ttk.Button(top, text="🔄 Liệt kê", command=fill_windows).pack(side="left")
 
         # bảng control soi được
-        cols = ("#", "type", "auto_id", "name", "val")
+        cols = ("#", "type", "auto_id", "name", "patterns")
         tv = ttk.Treeview(win, columns=cols, show="headings", height=9)
-        for c, w in zip(cols, (36, 80, 210, 300, 40)):
+        for c, w in zip(cols, (34, 74, 190, 240, 160)):
             tv.heading(c, text=c); tv.column(c, width=w, anchor="w")
         tv.pack(fill="both", expand=True, **pad)
 
@@ -251,7 +251,7 @@ class App:
             tv.delete(*tv.get_children())
             for i, r in enumerate(acc, 1):
                 tv.insert("", "end", values=(i, r["type"], r["auto_id"],
-                          r["name"], "✔" if r["value"] else ""))
+                          r["name"], ",".join(r.get("patterns", []))))
             inputs = [r for r in acc if r["type"] != "button"]
 
             def _loc(r):                              # locator dự phòng nhiều tầng
