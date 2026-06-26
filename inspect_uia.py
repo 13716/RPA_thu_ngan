@@ -40,37 +40,63 @@ def list_windows():
     print('\n→ Chạy lại: py -3.11 inspect_uia.py "<một phần title>"')
 
 
-def collect_controls(title: str) -> "tuple[str, list[dict]]":
-    """Soi 1 cửa sổ → (tiêu đề thật, danh sách control tương tác được).
-    Mỗi control: {type, auto_id, name, value}. Dùng chung cho GUI tạo profile."""
-    from pywinauto import Desktop
-    win = Desktop(backend="uia").window(title_re=f"(?i).*{title}.*")
-    win.wait("exists", timeout=10)
-    rows = []
-    for ctrl in win.descendants():
-        info = ctrl.element_info
-        ct = info.control_type
-        if ct not in CTRL_MAP:
-            continue
-        has_value = False
-        try:
-            has_value = bool(ctrl.iface_value) if hasattr(ctrl, "iface_value") else has_value
-        except Exception:
-            pass
-        rows.append({
-            "type": CTRL_MAP[ct],
-            "auto_id": info.automation_id or "",
-            "name": info.name or "",
-            "value": has_value,
-        })
-    return win.window_text(), rows
-
-
-# kiểu control quan tâm -> kiểu trường trong tool
+# kiểu control TƯƠNG TÁC phổ biến -> kiểu trường trong tool (mở rộng để đỡ sót)
 CTRL_MAP = {
     "Edit": "text", "Document": "paragraph", "ComboBox": "dropdown",
     "CheckBox": "checkbox", "RadioButton": "radio", "Button": "button",
+    "Hyperlink": "link", "TabItem": "tab", "MenuItem": "menuitem",
+    "ListItem": "listitem", "Slider": "slider", "Spinner": "spinner",
 }
+
+
+def _elevation_hint(err: Exception) -> str:
+    low = str(err).lower()
+    if any(k in low for k in ("denied", "0x80070005", "access is denied", "elevat")):
+        return ("⛔ Không đọc được cây UIA — RẤT CÓ THỂ app chạy QUYỀN ADMIN còn tool thì không "
+                "(Windows chặn tiến trình quyền thấp đọc cửa sổ quyền cao). Hãy chạy lại tool "
+                "BẰNG QUYỀN ADMINISTRATOR. (gốc: " + str(err)[:100] + ")")
+    return "Soi lỗi: " + str(err)[:180]
+
+
+def collect_controls(title: str) -> "tuple[str, list[dict]]":
+    """Soi 1 cửa sổ → (tiêu đề thật, danh sách control). Bắt MỌI control tương tác HOẶC có
+    auto_id (đỡ sót Hyperlink/Group-có-id như richInput của Zalo). Kèm control_type + index
+    để làm LOCATOR DỰ PHÒNG khi auto_id/name rỗng/trùng.
+    """
+    from pywinauto import Desktop
+    win = Desktop(backend="uia").window(title_re=f"(?i).*{title}.*")
+    win.wait("exists", timeout=10)
+    try:
+        win.wait("visible ready", timeout=5)          # chờ app VẼ XONG (tránh cây thiếu/đang load)
+    except Exception:
+        pass
+    try:
+        descs = win.descendants()
+    except Exception as e:
+        raise RuntimeError(_elevation_hint(e))
+    rows, counter = [], {}
+    for ctrl in descs:
+        info = ctrl.element_info
+        ct = info.control_type or ""
+        aid = info.automation_id or ""
+        if ct not in CTRL_MAP and not aid:            # bỏ container/nhãn không định danh
+            continue
+        idx = counter.get(ct, 0)
+        counter[ct] = idx + 1
+        has_value = False
+        try:
+            has_value = bool(ctrl.iface_value) if hasattr(ctrl, "iface_value") else False
+        except Exception:
+            pass
+        rows.append({
+            "type": CTRL_MAP.get(ct, (ct or "other").lower()),
+            "auto_id": aid,
+            "name": info.name or "",
+            "control_type": ct,                        # locator dự phòng
+            "index": idx,                              # found_index theo control_type
+            "value": has_value,
+        })
+    return win.window_text(), rows
 
 
 def _slug(s: str) -> str:

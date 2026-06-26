@@ -253,6 +253,14 @@ class App:
                 tv.insert("", "end", values=(i, r["type"], r["auto_id"],
                           r["name"], "✔" if r["value"] else ""))
             inputs = [r for r in acc if r["type"] != "button"]
+
+            def _loc(r):                              # locator dự phòng nhiều tầng
+                if r["auto_id"]:
+                    return {"auto_id": r["auto_id"]}
+                if r["name"]:
+                    return {"name": r["name"]}
+                return {"control_type": r.get("control_type", ""),
+                        "found_index": r.get("index", 0)}
             prof = {
                 "name": wt_box[0] or title_var.get().strip(),
                 "method": method_var.get(),
@@ -261,7 +269,7 @@ class App:
                 "fields": [
                     {"key": inspect_uia._slug(r["name"]) or f"field{i}",
                      "label": r["name"] or "",
-                     **({"auto_id": r["auto_id"]} if r["auto_id"] else {"name": r["name"]}),
+                     **_loc(r),
                      "type": r["type"]}
                     for i, r in enumerate(inputs, 1)
                 ],

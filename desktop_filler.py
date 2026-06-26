@@ -3,8 +3,9 @@
 Backend ĐÍCH = APP DESKTOP (pywinauto-UIA). Điền dữ liệu OCR vào một app Windows.
 Tái dùng bộ đồ nghề đã kiểm chứng trên Zalo: force_front, clipboard, read-back verify.
 
-Định vị ô theo 'auto_id' HOẶC 'name' (một số app như Access để định danh ở Name,
-auto_id rỗng). Lấy chúng bằng:  py -3.11 inspect_uia.py "<tên app>" --all
+Định vị ô theo locator NHIỀU TẦNG: 'auto_id' → 'name' → 'control_type'+'found_index'
+(app không có auto_id/name ổn định vẫn bám được). Lấy bằng GUI "➕ App mới…" hoặc
+py -3.11 inspect_uia.py "<tên app>" --all. App chạy quyền Admin → chạy tool as Admin.
 
 ĐANG CẤU HÌNH CHO: Microsoft Access (form FormHoaDon trong hoadon_demo.accdb).
 """
@@ -51,31 +52,68 @@ def connect_or_launch(title: str = WINDOW_TITLE, exe: str = APP_EXE, timeout: in
 
     try:
         return _find()
-    except Exception:
-        if exe and os.path.exists(exe):
-            print(f"🚀 Khởi chạy: {exe}")
-            os.startfile(exe)
-            end = time.time() + timeout
-            while time.time() < end:
-                try:
-                    return _find()
-                except Exception:
-                    time.sleep(1)
-        raise RuntimeError(f"Không thấy cửa sổ '{title}' (app đã mở chưa? đúng tiêu đề chưa?)")
+    except Exception as e:
+        first_err = e
+    if exe and os.path.exists(exe):
+        print(f"🚀 Khởi chạy: {exe}")
+        os.startfile(exe)
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                return _find()
+            except Exception as e:
+                first_err = e
+                time.sleep(1)
+    from inspect_uia import _elevation_hint
+    hint = _elevation_hint(first_err)
+    raise RuntimeError(f"Không thấy/bám được cửa sổ '{title}' (app đã mở? đúng tiêu đề?). {hint}")
+
+
+# kiểu trường (tool) -> control_type (UIA) để định vị đúng loại control
+_TYPE2CT = {
+    "text": "Edit", "paragraph": "Document", "dropdown": "ComboBox",
+    "checkbox": "CheckBox", "radio": "RadioButton", "button": "Button",
+    "link": "Hyperlink", "tab": "TabItem", "menuitem": "MenuItem",
+    "listitem": "ListItem", "slider": "Slider", "spinner": "Spinner",
+}
 
 
 def _locate(dlg, field: dict):
-    """Tìm control theo auto_id hoặc theo Name (khớp 1 phần — Access có tiền tố 'Detail Section, ')."""
+    """Định vị control theo locator NHIỀU TẦNG: auto_id → name → control_type+found_index.
+    control_type suy từ field['type'] (mở rộng ngoài Edit) hoặc field['control_type']."""
+    ct = field.get("control_type") or _TYPE2CT.get(field.get("type", ""))
     if field.get("auto_id"):
-        return dlg.child_window(auto_id=field["auto_id"], control_type="Edit").wrapper_object()
-    nm = field["name"]
-    return dlg.child_window(title_re=f"(?i).*{re.escape(nm)}.*", control_type="Edit").wrapper_object()
+        kw = {"auto_id": field["auto_id"]}
+        if ct:
+            kw["control_type"] = ct
+        return dlg.child_window(**kw).wrapper_object()
+    if field.get("name"):
+        kw = {"title_re": f"(?i).*{re.escape(field['name'])}.*"}
+        if ct:
+            kw["control_type"] = ct
+        return dlg.child_window(**kw).wrapper_object()
+    if field.get("control_type"):                  # dự phòng: theo loại + thứ tự
+        return dlg.child_window(control_type=field["control_type"],
+                                found_index=int(field.get("found_index", 0))).wrapper_object()
+    raise RuntimeError("field thiếu locator (cần auto_id / name / control_type)")
+
+
+def _locate_retry(dlg, field: dict, tries: int = 3):
+    """Chờ-sẵn-sàng: thử định vị vài lần (control có thể chưa render xong)."""
+    last = None
+    for i in range(tries):
+        try:
+            return _locate(dlg, field)
+        except Exception as e:
+            last = e
+            time.sleep(0.5)
+    raise last
 
 
 def fill_one(dlg, field: dict, value) -> str:
     from pywinauto.keyboard import send_keys
     print("       [locate]", end="", flush=True)
-    ctrl = _locate(dlg, field)
+    ctrl = _locate_retry(dlg, field)
     print(" [click]", end="", flush=True)
     try:
         ctrl.click_input()
