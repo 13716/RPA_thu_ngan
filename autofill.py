@@ -518,32 +518,64 @@ def run_excel(args) -> int:
 
 
 def run_web(args) -> int:
-    """Đích = TRANG WEB BẤT KỲ (không phải Google Form). Soi DOM thật → điền theo selector.
-    Trang có captcha thì chỉ điền, giữ trình duyệt cho người tự giải + bấm nút."""
+    """Đích = TRANG WEB BẤT KỲ. Soi DOM + OCR + điền trong MỘT phiên.
+    Nếu có Chrome đang mở kèm cổng gỡ lỗi 9222 → GẮN vào, điền thẳng tab đang mở
+    (không mở/đóng browser mới, giữ nguyên phiên/captcha). Không thì tự mở Chrome."""
     import web_target
+    from playwright.sync_api import sync_playwright
     url = args.web
+    attach = web_target.cdp_alive()
     print(f"\n🌐 Trang web: {url}")
-    fields = web_target.inspect_web(url, headless=not args.headed)
-    if not fields:
-        print("⛔ Không soi được ô nhập nào trên trang (JS chưa tải xong? sai URL?).")
-        return 1
-    print(f"   {len(fields)} ô nhập:")
-    for f in fields:
-        print(f"     [{f['type']}] {f['entry']}  {f['label'][:36]!r}")
+    print("   🔗 GẮN vào Chrome đang mở (cổng 9222) — điền thẳng tab của bạn."
+          if attach else
+          "   🆕 Mở Chrome mới (chưa thấy Chrome gỡ lỗi 9222). "
+          "Mẹo: chạy mo_chrome_debug.ps1 để mình dùng Chrome có sẵn.")
 
-    def do_one(items):
-        res = web_target.fill_web(url, items, headless=not args.headed,
-                                  submit=args.submit,
-                                  keep_open_secs=600 if args.headed else 0)  # chờ tới khi đóng tab (trần 10')
-        if not res["ok"]:
-            print("⛔ Không điền được ô nào (selector đổi? trang chưa tải?).")
+    with sync_playwright() as p:
+        try:
+            browser, page, owns = web_target.open_page(
+                p, url, attach=attach, headless=not args.headed)
+        except Exception as e:
+            print(f"⛔ Không mở/gắn được trang: {str(e)[:80]}")
             return 1
+
+        fields = web_target.inspect_page(page)
+        if not fields:
+            print("⛔ Không soi được ô nhập nào (JS chưa tải xong? sai URL?).")
+            return 1
+        print(f"   {len(fields)} ô nhập: " + ", ".join(f["entry"] for f in fields[:8]))
+
+        records = _extract_records(args.doc, fields)      # OCR (trang vẫn mở)
+        raw = records[0] if records else {}
+        items, _issues = _items_from_values(raw, fields)  # web: không chặn maker-checker
+
         if not args.submit:
-            print("💡 Đã điền (chưa bấm nút). Tự giải captcha + bấm gửi trên trình duyệt, "
-                  "hoặc thêm --submit để tự bấm (KHÔNG vượt được captcha).")
+            print("\n💡 Xem trước (chưa điền). Thêm --submit để điền lên trang.")
+            return 0
+
+        web_target.apply_fills(page, items)
+        try:
+            page.screenshot(path=str(_bootstrap.SCREENSHOT_DIR / "web_fill.png"), full_page=True)
+        except Exception:
+            pass
+        if args.submit:
+            web_target.try_submit(page)
+
+        if not owns:
+            print("\n✅ Đã điền vào TAB ĐANG MỞ của bạn — không đụng/đóng trình duyệt. "
+                  "Tự giải captcha + xem kết quả thoải mái.")
+        else:
+            print("\n✅ Đã điền. Giữ trình duyệt — tự giải captcha, bấm nút, ĐỌC kết quả; "
+                  "ĐÓNG tab khi xong (trần 10').")
+            try:
+                page.wait_for_event("close", timeout=600000)
+            except Exception:
+                pass
+            try:
+                browser.close()
+            except Exception:
+                pass
         return 0
-    # web: không chặn maker-checker (điền được ô nào hay ô đó; người kiểm tra)
-    return _run_records(args, fields, do_one, block_on_issues=False)
 
 
 EPILOG = """\

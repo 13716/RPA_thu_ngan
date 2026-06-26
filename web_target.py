@@ -62,6 +62,89 @@ def _fields_from_raw(raw: list) -> list:
     return fields
 
 
+SUBMIT_RE = r"tra cứu|tìm kiếm|gửi|tra cuu|submit|search"
+DEFAULT_CDP = "http://127.0.0.1:9222"      # 127.0.0.1 (KHÔNG 'localhost' → tránh IPv6 ::1 bị từ chối)
+
+
+def cdp_alive(cdp_url: str = DEFAULT_CDP) -> bool:
+    """Có Chrome đang chạy kèm cổng gỡ lỗi (để GẮN vào, dùng tab đang mở) không?"""
+    import urllib.request
+    try:
+        urllib.request.urlopen(cdp_url + "/json/version", timeout=1.5)
+        return True
+    except Exception:
+        return False
+
+
+def open_page(p, url, *, attach=False, cdp_url=DEFAULT_CDP, headless=False):
+    """Lấy 1 trang để thao tác.
+    attach=True → GẮN vào Chrome đang mở (CDP), dùng tab khớp url (không mở/đóng browser mới).
+    attach=False → tự mở Chrome mới.
+    Trả (browser, page, owns) — owns=True nghĩa là mình tự mở (cần tự đóng)."""
+    if attach:
+        browser = p.chromium.connect_over_cdp(cdp_url)
+        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+        key = re.sub(r"^https?://", "", url or "").split("/")[0]
+        page = next((x for x in ctx.pages if key and key in (x.url or "")), None)
+        page = page or (ctx.pages[-1] if ctx.pages else ctx.new_page())
+        if url and key and key not in (page.url or ""):
+            page.goto(url, wait_until="domcontentloaded")
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+        return browser, page, False
+    browser = p.chromium.launch(headless=headless, channel="chrome")
+    page = browser.new_page()
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    page.wait_for_timeout(2000)
+    return browser, page, True
+
+
+def inspect_page(page) -> list:
+    """Soi DOM của 1 trang ĐANG MỞ → schema ô nhập."""
+    return _fields_from_raw(page.evaluate(_INSPECT_JS))
+
+
+def apply_fills(page, items: list) -> dict:
+    """Điền các item (đã có 'value') theo selector ('entry') + đọc lại."""
+    filled = {}
+    for it in items:
+        v = it.get("value")
+        if v in (None, "", []):
+            continue
+        sel, t = it["entry"], it["type"]
+        try:
+            loc = page.locator(sel).first
+            if t in ("text", "paragraph", "date"):
+                loc.fill(str(v))
+            elif t == "dropdown":
+                loc.select_option(label=str(v))
+            elif t == "checkbox":
+                loc.check()
+            elif t == "radio":
+                page.locator(f"{sel}[value='{v}']").first.check()
+            try:
+                got = loc.input_value()
+            except Exception:
+                got = str(v)
+            filled[sel] = got
+            print(f"  • {it['label'][:32]:<32} = {got!r}")
+        except Exception as e:
+            print(f"  • {it['label'][:32]:<32} ⛔ {str(e)[:60]}")
+    return filled
+
+
+def try_submit(page, submit_text: str = SUBMIT_RE) -> bool:
+    try:
+        page.get_by_role("button", name=re.compile(submit_text, re.I)).first.click()
+        print(f"  ▶️  đã bấm nút gửi/tra cứu")
+        return True
+    except Exception as e:
+        print(f"  ⚠️  không tự bấm được nút: {str(e)[:50]}")
+        return False
+
+
 def inspect_web(url: str, *, headless: bool = True, timeout: int = 30000) -> list:
     """Soi 1 trang web → danh sách ô nhập (làm schema cho OCR/điền)."""
     from playwright.sync_api import sync_playwright
