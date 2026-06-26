@@ -1,0 +1,153 @@
+# Mock Orion Health HIS — giả lập 3 màn (Đăng nhập → Trang chủ → OPD Visit Registration)
+# để TEST automation UIA offline. WinForms lấy Control.Name làm UIA AutomationId
+# nên đặt Name trùng auto_id OH thật -> desktop_filler target y hệt.
+#
+# Chạy:  powershell -ExecutionPolicy Bypass -File mock_oh\mock_oh.ps1
+# (đăng nhập: gõ user/pass bất kỳ rồi ĐĂNG NHẬP; mở "OPD Visit Registration" rồi chạy autofill)
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[Windows.Forms.Application]::EnableVisualStyles()
+
+$form = New-Object Windows.Forms.Form
+$form.Name = "FormMain"                               # auto_id cửa sổ (như OH)
+$form.Text = "Orion Health HIS (UAT Environment)"
+$form.Size = New-Object Drawing.Size(940, 660)
+$form.StartPosition = "CenterScreen"
+$form.BackColor = [Drawing.Color]::White
+
+function New-Label($text, $x, $y, $w) {
+    $l = New-Object Windows.Forms.Label
+    $l.Text = $text; $l.Location = "$x,$y"; $l.Size = "$w,22"
+    $l.Font = New-Object Drawing.Font("Segoe UI", 10)
+    return $l
+}
+function New-Box($name, $x, $y, $w) {
+    $t = New-Object Windows.Forms.TextBox
+    $t.Name = $name; $t.Location = "$x,$y"; $t.Size = "$w,26"
+    $t.Font = New-Object Drawing.Font("Segoe UI", 11)
+    return $t
+}
+
+# ───────────────── PANEL 1: ĐĂNG NHẬP ─────────────────
+$pnlLogin = New-Object Windows.Forms.Panel
+$pnlLogin.Dock = "Fill"
+
+$ttl = New-Label "Orion Health HIS" 320 40 320
+$ttl.Font = New-Object Drawing.Font("Segoe UI", 20, [Drawing.FontStyle]::Bold)
+$ttl.ForeColor = [Drawing.Color]::FromArgb(0,120,160)
+$pnlLogin.Controls.Add($ttl)
+$pnlLogin.Controls.Add((New-Label "Hello, Welcome!" 330 90 300))
+
+$pnlLogin.Controls.Add((New-Label "Tên đăng nhập" 300 150 320))
+$txtUser = New-Box "UserNameTextBox" 300 174 320
+$pnlLogin.Controls.Add($txtUser)
+
+$pnlLogin.Controls.Add((New-Label "Mật khẩu" 300 214 320))
+$txtPass = New-Box "PasswordTextBox" 300 238 320
+$txtPass.PasswordChar = "*"
+$pnlLogin.Controls.Add($txtPass)
+
+$pnlLogin.Controls.Add((New-Label "Cơ sở (Facility)" 300 278 320))
+$cboFac = New-Object Windows.Forms.ComboBox
+$cboFac.Name = "FacilitySelectorComboBox"; $cboFac.Location = "300,302"; $cboFac.Size = "320,26"
+$cboFac.DropDownStyle = "DropDownList"
+[void]$cboFac.Items.AddRange(@("HHN-Vinmec Times City","Vinmec Central Park"))
+$cboFac.SelectedIndex = 0
+$pnlLogin.Controls.Add($cboFac)
+
+$btnLogin = New-Object Windows.Forms.Button
+$btnLogin.Name = "LoginButton"; $btnLogin.Text = "ĐĂNG NHẬP"
+$btnLogin.Location = "300,350"; $btnLogin.Size = "320,40"
+$btnLogin.BackColor = [Drawing.Color]::FromArgb(0,120,160)
+$btnLogin.ForeColor = [Drawing.Color]::White
+$btnLogin.Font = New-Object Drawing.Font("Segoe UI", 11, [Drawing.FontStyle]::Bold)
+$pnlLogin.Controls.Add($btnLogin)
+
+$lblLoginMsg = New-Label "" 300 400 320
+$lblLoginMsg.Name = "WarningContentTextBlock"; $lblLoginMsg.ForeColor = [Drawing.Color]::Red
+$pnlLogin.Controls.Add($lblLoginMsg)
+
+# ───────────────── PANEL 2: TRANG CHỦ ─────────────────
+$pnlHome = New-Object Windows.Forms.Panel
+$pnlHome.Dock = "Fill"; $pnlHome.Visible = $false
+
+$pnlHome.Controls.Add((New-Label "Quick Launch (gõ tên màn):" 30 20 260))
+$txtSearch = New-Box "PART_SearchTextBox" 30 44 300
+$pnlHome.Controls.Add($txtSearch)
+$pnlHome.Controls.Add((New-Label "Applications" 30 90 200))
+
+$apps = @("OPD Visit Registration","Emergency Visit Registration","Patient Profile",
+          "Patient Queue","Patient Billing","Select Company")
+$y = 116
+foreach ($a in $apps) {
+    $b = New-Object Windows.Forms.Button
+    $b.Name = $a                                      # auto_id = tên app (như sidebar OH)
+    $b.Text = $a; $b.Location = "30,$y"; $b.Size = "300,34"
+    $b.TextAlign = "MiddleLeft"
+    $b.Font = New-Object Drawing.Font("Segoe UI", 10)
+    if ($a -eq "OPD Visit Registration") {
+        $b.Add_Click({ $pnlHome.Visible = $false; $pnlReg.Visible = $true })
+    } else {
+        $b.Add_Click({ [Windows.Forms.MessageBox]::Show("(mock) màn '$($this.Name)' chưa dựng") })
+    }
+    $pnlHome.Controls.Add($b)
+    $y += 40
+}
+
+# ──────────── PANEL 3: OPD VISIT REGISTRATION (form điền) ────────────
+$pnlReg = New-Object Windows.Forms.Panel
+$pnlReg.Dock = "Fill"; $pnlReg.Visible = $false; $pnlReg.AutoScroll = $true
+
+$hdr = New-Label "OPD Visit Registration" 30 16 500
+$hdr.Font = New-Object Drawing.Font("Segoe UI", 15, [Drawing.FontStyle]::Bold)
+$pnlReg.Controls.Add($hdr)
+
+# nhãn hiển thị | tên control (auto_id). desktop_filler target theo auto_id.
+$regFields = @(
+    @("Họ và tên bệnh nhân", "txtHoTen"),
+    @("Ngày tháng năm sinh (DD/MM/YYYY)", "txtNgaySinh"),
+    @("Giới tính", "txtGioiTinh"),
+    @("Số CCCD / Hộ chiếu", "txtCCCD"),
+    @("Địa chỉ thường trú", "txtDiaChi"),
+    @("Số điện thoại", "txtSDT"),
+    @("Số thẻ BHYT", "txtBHYT")
+)
+$y = 64
+foreach ($fld in $regFields) {
+    $pnlReg.Controls.Add((New-Label $fld[0] 30 $y 240))
+    $pnlReg.Controls.Add((New-Box $fld[1] 280 ($y-2) 360))
+    $y += 40
+}
+
+$btnSave = New-Object Windows.Forms.Button
+$btnSave.Name = "ButtonSave"; $btnSave.Text = "Save"
+$btnSave.Location = "280,$y"; $btnSave.Size = "120,36"
+$btnSave.BackColor = [Drawing.Color]::FromArgb(0,150,90)
+$btnSave.ForeColor = [Drawing.Color]::White
+$lblSaved = New-Label "" 420 ($y+6) 220
+$lblSaved.Name = "StatusTextBlock"; $lblSaved.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
+$btnSave.Add_Click({ $lblSaved.Text = "✓ Đã lưu bản ghi (mock)" })
+$pnlReg.Controls.Add($btnSave)
+$pnlReg.Controls.Add($lblSaved)
+
+$btnBack = New-Object Windows.Forms.Button
+$btnBack.Name = "BackButton"; $btnBack.Text = "← Trang chủ"
+$btnBack.Location = "30,$y"; $btnBack.Size = "120,36"
+$btnBack.Add_Click({ $pnlReg.Visible = $false; $pnlHome.Visible = $true })
+$pnlReg.Controls.Add($btnBack)
+
+# ───────────────── điều hướng ─────────────────
+$btnLogin.Add_Click({
+    if ($txtUser.Text.Trim() -eq "" -or $txtPass.Text.Trim() -eq "") {
+        $lblLoginMsg.Text = "Nhập tên đăng nhập và mật khẩu."
+        return
+    }
+    $pnlLogin.Visible = $false; $pnlHome.Visible = $true
+    $form.Text = "Registration (UAT Environment) - $($txtUser.Text)"
+})
+
+$form.Controls.Add($pnlReg)
+$form.Controls.Add($pnlHome)
+$form.Controls.Add($pnlLogin)
+[void][Windows.Forms.Application]::Run($form)

@@ -1,0 +1,18 @@
+{
+  "_help": "Profile cho APP GIẢ LẬP OH (mock_oh.ps1) — test automation UIA offline. Mở mock, đăng nhập, bấm 'OPD Visit Registration' để hiện form, rồi: py -3.11 autofill.py --profile oh_mock --doc <cccd>.jpg --submit. Khi có OH thật: đổi auto_id cho khớp file soi uia_walker.",
+  "name": "OH Mock (OPD Visit Registration)",
+  "method": "uia",
+  "window_title": "Orion Health HIS|Registration",
+  "window_auto_id": "FormMain",
+  "exe": "",
+  "fields": [
+    {"key": "ho_ten",    "label": "Họ và tên bệnh nhân",          "auto_id": "txtHoTen",    "type": "text"},
+    {"key": "ngay_sinh", "label": "Ngày tháng năm sinh",           "auto_id": "txtNgaySinh", "type": "date"},
+    {"key": "gioi_tinh", "label": "Giới tính",                     "auto_id": "txtGioiTinh", "type": "text"},
+    {"key": "cccd",      "label": "Số căn cước công dân hoặc Hộ chiếu", "auto_id": "txtCCCD", "type": "text"},
+    {"key": "dia_chi",   "label": "Địa chỉ thường trú",            "auto_id": "txtDiaChi",   "type": "text"},
+    {"key": "sdt",       "label": "Số điện thoại liên hệ",         "auto_id": "txtSDT",      "type": "text"},
+    {"key": "bhyt",      "label": "Số thẻ Bảo hiểm y tế (BHYT)",   "auto_id": "txtBHYT",     "type": "text"}
+  ],
+  "submit": {"auto_id": "ButtonSave"}
+}

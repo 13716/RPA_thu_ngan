@@ -39,15 +39,32 @@ SUBMIT = {"keys": "+{ENTER}"}   # hoặc {"auto_id": "..."} / {"name": "..."} v�
 # ===========================================================================
 
 
-def connect_or_launch(title: str = WINDOW_TITLE, exe: str = APP_EXE, timeout: int = 40):
+_BROWSER_CLASSES = ("Chrome_WidgetWin", "MozillaWindowClass")   # tránh bám nhầm tab trình duyệt cùng tên
+
+
+def connect_or_launch(title: str = WINDOW_TITLE, exe: str = APP_EXE, timeout: int = 40,
+                      window_auto_id: "str | None" = None):
     from pywinauto import Desktop
 
     def _find():
-        wins = Desktop(backend="uia").windows(title_re=f"(?i).*{title}.*")
-        vis = [w for w in wins if w.is_visible()] or wins
-        if not vis:
+        cand = []
+        for w in Desktop(backend="uia").windows():
+            try:
+                if not w.is_visible():
+                    continue
+                cls = w.element_info.class_name or ""
+                if any(b in cls for b in _BROWSER_CLASSES):
+                    continue                                   # bỏ Chrome/Edge/Firefox
+                if window_auto_id:                             # ưu tiên bám theo auto_id cửa sổ (chắc nhất)
+                    if w.element_info.automation_id == window_auto_id:
+                        cand.append(w)
+                elif re.search(f"(?i).*{title}.*", w.window_text() or ""):
+                    cand.append(w)
+            except Exception:
+                continue
+        if not cand:
             raise RuntimeError("no window")
-        best = max(vis, key=lambda w: w.rectangle().width() * w.rectangle().height())
+        best = max(cand, key=lambda w: w.rectangle().width() * w.rectangle().height())
         return Desktop(backend="uia").window(handle=best.handle)
 
     try:
@@ -173,10 +190,12 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
         if exe and not os.path.isabs(exe):
             exe = os.path.join(os.path.dirname(os.path.abspath(__file__)), exe)
         submit_cfg = profile.get("submit", {})
+        win_aid = profile.get("window_auto_id")
     else:
         fields, title, exe, submit_cfg = FIELDS, WINDOW_TITLE, APP_EXE, SUBMIT
+        win_aid = None
 
-    dlg = connect_or_launch(title, exe)
+    dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
         end = time.time() + 20
@@ -187,7 +206,7 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
             except Exception:
                 time.sleep(1)
                 try:
-                    dlg = connect_or_launch(title, exe)
+                    dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
                 except Exception:
                     pass
     force_front(dlg)
