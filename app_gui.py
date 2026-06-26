@@ -227,7 +227,8 @@ class App:
             tv.heading(c, text=c); tv.column(c, width=w, anchor="w")
         tv.pack(fill="both", expand=True, **pad)
 
-        ttk.Label(win, text="Profile JSON (sửa 'key'/'label'/'type', xoá ô thừa rồi Lưu):"
+        ttk.Label(win, text="App nhiều màn (Zalo: khoá→chính)? Chuyển app sang từng màn rồi bấm "
+                  "'Soi'/'Soi sau 3s' nhiều lần — control được GỘP. Sửa 'key'/'label'/'type', xoá ô thừa:"
                   ).pack(anchor="w", padx=8)
         txt = tk.Text(win, height=12, font=("Consolas", 9))
         txt.pack(fill="both", expand=True, **pad)
@@ -242,49 +243,68 @@ class App:
         ttk.Combobox(bot, textvariable=method_var, values=["uia", "com"], width=6,
                      state="readonly").pack(side="left", padx=4)
 
-        def do_soi():
+        # App nhiều MÀN (vd Zalo: màn khoá → màn chính) → soi từng màn rồi GỘP lại.
+        acc = []          # control gộp qua nhiều lần soi
+        wt_box = [""]     # tiêu đề cửa sổ thật
+
+        def _render():
+            tv.delete(*tv.get_children())
+            for i, r in enumerate(acc, 1):
+                tv.insert("", "end", values=(i, r["type"], r["auto_id"],
+                          r["name"], "✔" if r["value"] else ""))
+            inputs = [r for r in acc if r["type"] != "button"]
+            prof = {
+                "name": wt_box[0] or title_var.get().strip(),
+                "method": method_var.get(),
+                "window_title": title_var.get().strip(),
+                "exe": "",
+                "fields": [
+                    {"key": inspect_uia._slug(r["name"]) or f"field{i}",
+                     "label": r["name"] or "",
+                     **({"auto_id": r["auto_id"]} if r["auto_id"] else {"name": r["name"]}),
+                     "type": r["type"]}
+                    for i, r in enumerate(inputs, 1)
+                ],
+                "submit": {"keys": "+{ENTER}"},
+            }
+            txt.delete("1.0", "end")
+            txt.insert("1.0", json.dumps(prof, ensure_ascii=False, indent=2))
+            if not name_var.get().strip() and wt_box[0]:
+                name_var.set(inspect_uia._slug(wt_box[0])[:20])
+
+        def do_soi(delay=0.0):
             t = title_var.get().strip()
             if not t:
                 messagebox.showwarning("Thiếu", "Chọn/nhập tên cửa sổ.", parent=win)
                 return
 
             def work():
+                if delay:
+                    threading.Event().wait(delay)     # chờ bạn chuyển app sang màn cần soi
                 try:
                     wt, rows = inspect_uia.collect_controls(t)
                 except Exception as ex:
                     err = str(ex) or repr(ex)
-                    self.root.after(0, lambda: messagebox.showerror(
-                        "Lỗi soi", err, parent=win))
+                    self.root.after(0, lambda: messagebox.showerror("Lỗi soi", err, parent=win))
                     return
-
-                def render():
-                    tv.delete(*tv.get_children())
-                    for i, r in enumerate(rows, 1):
-                        tv.insert("", "end", values=(i, r["type"], r["auto_id"],
-                                  r["name"], "✔" if r["value"] else ""))
-                    inputs = [r for r in rows if r["type"] != "button"]
-                    prof = {
-                        "name": wt,
-                        "method": method_var.get(),
-                        "window_title": t,
-                        "exe": "",
-                        "fields": [
-                            {"key": inspect_uia._slug(r["name"]) or f"field{i}",
-                             "label": r["name"] or "",
-                             **({"auto_id": r["auto_id"]} if r["auto_id"]
-                                else {"name": r["name"]}),
-                             "type": r["type"]}
-                            for i, r in enumerate(inputs, 1)
-                        ],
-                        "submit": {"keys": "+{ENTER}"},
-                    }
-                    txt.delete("1.0", "end")
-                    txt.insert("1.0", json.dumps(prof, ensure_ascii=False, indent=2))
-                    if not name_var.get().strip():
-                        name_var.set(inspect_uia._slug(wt)[:20])
-                self.root.after(0, render)
+                if wt:
+                    wt_box[0] = wt
+                seen = {(r["type"], r["auto_id"] or r["name"]) for r in acc}
+                added = 0
+                for r in rows:                        # GỘP: chỉ thêm control mới (theo auto_id/name)
+                    key = (r["type"], r["auto_id"] or r["name"])
+                    if key not in seen and (r["auto_id"] or r["name"]):
+                        acc.append(r); seen.add(key); added += 1
+                self.root.after(0, lambda: (_render(), win.title(
+                    f"Soi app & tạo profile — gộp {len(acc)} control (+{added} màn này)")))
             threading.Thread(target=work, daemon=True).start()
+
+        def do_clear():
+            acc.clear(); wt_box[0] = ""; _render()
+
         ttk.Button(top, text="🔍 Soi", command=do_soi).pack(side="left", padx=4)
+        ttk.Button(top, text="⏱ Soi sau 3s", command=lambda: do_soi(3.0)).pack(side="left", padx=2)
+        ttk.Button(top, text="🗑", width=3, command=do_clear).pack(side="left")
 
         def do_save():
             nm = name_var.get().strip()
