@@ -47,11 +47,16 @@ _INSPECT_JS = r"""
 """
 
 
+_NOISE_RE = re.compile(r"(search|timkiem|tu[\s_]?khoa)", re.I)   # ô tìm kiếm trang — bỏ qua
+
+
 def _fields_from_raw(raw: list) -> list:
     fields, seen = [], set()
     for r in raw:
         if r["id"] in SKIP_IDS or r["selector"] in seen:
             continue
+        if _NOISE_RE.search((r["id"] or "") + " " + (r["name"] or "")):
+            continue                                       # vd #searchHome (ô tìm kiếm header)
         seen.add(r["selector"])
         fields.append({
             "label": r["label"] or r["name"] or r["selector"],
@@ -135,14 +140,37 @@ def apply_fills(page, items: list) -> dict:
     return filled
 
 
-def try_submit(page, submit_text: str = SUBMIT_RE) -> bool:
+def has_captcha(page) -> bool:
+    """Trang có reCAPTCHA/hCaptcha không (để KHỎI bấm nút vô ích — captcha chặn)."""
     try:
-        page.get_by_role("button", name=re.compile(submit_text, re.I)).first.click()
-        print(f"  ▶️  đã bấm nút gửi/tra cứu")
-        return True
-    except Exception as e:
-        print(f"  ⚠️  không tự bấm được nút: {str(e)[:50]}")
+        return page.locator(
+            "iframe[src*='recaptcha'], iframe[src*='hcaptcha'], .g-recaptcha, "
+            "#g-recaptcha-response, [class*='captcha']").count() > 0
+    except Exception:
         return False
+
+
+def try_submit(page, submit_text: str = SUBMIT_RE) -> bool:
+    """Bấm nút gửi/tra cứu — thử nhiều kiểu, timeout NGẮN (không treo 30s)."""
+    rx = re.compile(submit_text, re.I)
+    strategies = (
+        lambda: page.get_by_role("button", name=rx),
+        lambda: page.locator("input[type=submit], input[type=button]").filter(has_text=rx),
+        lambda: page.get_by_role("link", name=rx),
+        lambda: page.locator("button, a").filter(has_text=rx),
+    )
+    for make in strategies:
+        try:
+            loc = make().first
+            if loc.count() == 0:
+                continue
+            loc.click(timeout=3000)
+            print("  ▶️  đã bấm nút gửi/tra cứu")
+            return True
+        except Exception:
+            continue
+    print("  ⚠️  không tự bấm được nút — bấm tay nhé.")
+    return False
 
 
 def inspect_web(url: str, *, headless: bool = True, timeout: int = 30000) -> list:

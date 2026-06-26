@@ -559,7 +559,10 @@ def run_web(args) -> int:
         except Exception:
             pass
         if args.submit:
-            web_target.try_submit(page)
+            if web_target.has_captcha(page):
+                print("  🔒 Trang có CAPTCHA → KHÔNG tự bấm nút (bạn tự giải captcha + bấm).")
+            else:
+                web_target.try_submit(page)
 
         if not owns:
             print("\n✅ Đã điền vào TAB ĐANG MỞ của bạn — không đụng/đóng trình duyệt. "
