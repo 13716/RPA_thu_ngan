@@ -24,3 +24,9 @@ demo_*.xlsx
 
 # Profile cá nhân (trỏ đường dẫn máy riêng) — không commit
 profiles/database1.json
+profiles/droidcam_client.json
+
+# Công cụ soi UIA ngoài (binary 24MB) + dữ liệu/nội bộ OH (tên người, workstation) — KHÔNG đẩy GitHub
+uia_walker/
+uia_walker.zip
+UIA_Analysis_Report_OrionHealth.html
