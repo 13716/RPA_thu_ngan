@@ -55,10 +55,10 @@ def connect_or_launch(title: str = WINDOW_TITLE, exe: str = APP_EXE, timeout: in
                 cls = w.element_info.class_name or ""
                 if any(b in cls for b in _BROWSER_CLASSES):
                     continue                                   # bỏ Chrome/Edge/Firefox
-                if window_auto_id:                             # ưu tiên bám theo auto_id cửa sổ (chắc nhất)
-                    if w.element_info.automation_id == window_auto_id:
-                        cand.append(w)
-                elif re.search(f"(?i).*{title}.*", w.window_text() or ""):
+                # khớp theo auto_id cửa sổ HOẶC theo tiêu đề (đỡ kén; vẫn đã loại trình duyệt)
+                aid_ok = window_auto_id and (w.element_info.automation_id == window_auto_id)
+                title_ok = re.search(f"(?i).*{title}.*", w.window_text() or "")
+                if aid_ok or title_ok:
                     cand.append(w)
             except Exception:
                 continue
