@@ -72,8 +72,12 @@ def connect_or_launch(title: str = WINDOW_TITLE, exe: str = APP_EXE, timeout: in
     except Exception as e:
         first_err = e
     if exe and os.path.exists(exe):
-        print(f"🚀 Khởi chạy: {exe}")
-        os.startfile(exe)
+        print(f"🚀 Tự khởi chạy app: {exe}")
+        if exe.lower().endswith(".ps1"):                   # script PowerShell (vd mock_oh)
+            import subprocess
+            subprocess.Popen(["powershell", "-ExecutionPolicy", "Bypass", "-File", exe])
+        else:                                              # .exe / .accdb …
+            os.startfile(exe)
         end = time.time() + timeout
         while time.time() < end:
             try:

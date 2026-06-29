@@ -4,7 +4,7 @@
   "method": "uia",
   "window_title": "Orion Health HIS|Registration",
   "window_auto_id": "FormMain",
-  "exe": "",
+  "exe": "mock_oh/mock_oh.ps1",
   "steps": [
     {"fill": "UserNameTextBox", "value_env": "OH_USER"},
     {"fill": "PasswordTextBox", "value_env": "OH_PASSWORD"},
