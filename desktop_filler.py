@@ -213,9 +213,12 @@ def _run_steps(dlg, steps: list) -> None:
             print(f"  ⌨️  điền {aid}")
         else:
             try:
-                ctrl.click_input()
+                ctrl.invoke()                  # InvokePattern: không cần cửa sổ ở trên cùng (chắc hơn click chuột)
             except Exception:
-                ctrl.invoke()
+                try:
+                    ctrl.click_input()
+                except Exception:
+                    pass
             print(f"  🖱️  bấm {aid}")
         time.sleep(0.4)
 
@@ -238,6 +241,7 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
     steps = profile.get("steps") if profile else None
     if steps:                                              # app nhiều màn: tự đăng nhập + mở form
         print("🧭 Điều hướng (đăng nhập → mở màn)...")
+        force_front(dlg)                                   # đưa ĐÚNG cửa sổ lên trước (click không trúng cửa sổ khác)
         _run_steps(dlg, steps)
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
@@ -248,10 +252,11 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
                 break
             except Exception:
                 time.sleep(1)
-                try:
-                    dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
-                except Exception:
-                    pass
+                if not steps:                              # có steps thì GIỮ đúng cửa sổ đã điều hướng (đừng bám cửa sổ khác)
+                    try:
+                        dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
+                    except Exception:
+                        pass
     force_front(dlg)
     print(f"  🪟 Đã bám cửa sổ: {dlg.window_text()!r}")
     out = {}
