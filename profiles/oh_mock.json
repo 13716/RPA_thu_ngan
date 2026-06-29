@@ -5,6 +5,14 @@
   "window_title": "Orion Health HIS|Registration",
   "window_auto_id": "FormMain",
   "exe": "",
+  "steps": [
+    {"fill": "UserNameTextBox", "value": "intern"},
+    {"fill": "PasswordTextBox", "value": "test"},
+    {"click": "LoginButton"},
+    {"wait": 1.2},
+    {"click": "OPD Visit Registration"},
+    {"wait": 1.0}
+  ],
   "fields": [
     {"key": "ho_ten",    "label": "Họ và tên bệnh nhân",          "auto_id": "txtHoTen",    "type": "text"},
     {"key": "ngay_sinh", "label": "Ngày tháng năm sinh",           "auto_id": "txtNgaySinh", "type": "date"},

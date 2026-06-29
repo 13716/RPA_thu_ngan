@@ -181,6 +181,45 @@ def do_submit(dlg, submit_cfg: "dict | None" = None) -> None:
         print(f"✅ Đã gửi phím lưu record ({sub['keys']}).")
 
 
+def _run_steps(dlg, steps: list) -> None:
+    """Các BƯỚC điều hướng trước khi điền (app nhiều màn): đăng nhập → mở form.
+    Mỗi step: {"fill": auto_id, "value"/"value_env"} | {"click": auto_id} | {"wait": giây}."""
+    from pywinauto.keyboard import send_keys
+    for st in steps:
+        if "wait" in st:
+            time.sleep(float(st["wait"]))
+            continue
+        aid = st.get("fill") or st.get("click")
+        ctrl = None
+        for _ in range(10):                                # chờ control xuất hiện sau điều hướng
+            try:
+                c = dlg.child_window(auto_id=aid).wrapper_object()
+                if c.is_visible():
+                    ctrl = c
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+        if ctrl is None:
+            print(f"  ⚠️  bước: không thấy '{aid}' (bỏ qua)")
+            continue
+        if "fill" in st:
+            val = os.environ.get(st["value_env"], "") if "value_env" in st else st.get("value", "")
+            try:
+                ctrl.set_edit_text(val)
+            except Exception:
+                ctrl.set_focus(); send_keys("^a{BACKSPACE}")
+                send_keys(val, with_spaces=True)
+            print(f"  ⌨️  điền {aid}")
+        else:
+            try:
+                ctrl.click_input()
+            except Exception:
+                ctrl.invoke()
+            print(f"  🖱️  bấm {aid}")
+        time.sleep(0.4)
+
+
 def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | None" = None) -> dict:
     # cấu hình: từ profile (đa-app) hoặc module (mặc định)
     if profile:
@@ -196,6 +235,10 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
         win_aid = None
 
     dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
+    steps = profile.get("steps") if profile else None
+    if steps:                                              # app nhiều màn: tự đăng nhập + mở form
+        print("🧭 Điều hướng (đăng nhập → mở màn)...")
+        _run_steps(dlg, steps)
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
         end = time.time() + 20
