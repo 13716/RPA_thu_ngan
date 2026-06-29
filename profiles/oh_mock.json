@@ -6,8 +6,8 @@
   "window_auto_id": "FormMain",
   "exe": "",
   "steps": [
-    {"fill": "UserNameTextBox", "value": "intern"},
-    {"fill": "PasswordTextBox", "value": "test"},
+    {"fill": "UserNameTextBox", "value_env": "OH_USER"},
+    {"fill": "PasswordTextBox", "value_env": "OH_PASSWORD"},
     {"click": "LoginButton"},
     {"wait": 1.2},
     {"click": "OPD Visit Registration"},
