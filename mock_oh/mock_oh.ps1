@@ -87,13 +87,60 @@ foreach ($a in $apps) {
     $b.TextAlign = "MiddleLeft"
     $b.Font = New-Object Drawing.Font("Segoe UI", 10)
     if ($a -eq "OPD Visit Registration") {
-        $b.Add_Click({ $pnlHome.Visible = $false; $pnlReg.Visible = $true })
+        $b.Add_Click({ $pnlHome.Visible = $false; $pnlSearch.Visible = $true })
     } else {
         $b.Add_Click({ [Windows.Forms.MessageBox]::Show("(mock) màn '$($this.Name)' chưa dựng") })
     }
     $pnlHome.Controls.Add($b)
     $y += 40
 }
+
+# ──────────── PANEL 2.5: TRA CỨU / TẠO BỆNH NHÂN (PatientBanner mô phỏng) ────────────
+$pnlSearch = New-Object Windows.Forms.Panel
+$pnlSearch.Dock = "Fill"; $pnlSearch.Visible = $false
+
+$sh = New-Label "Tra cứu bệnh nhân" 30 16 400
+$sh.Font = New-Object Drawing.Font("Segoe UI", 15, [Drawing.FontStyle]::Bold)
+$pnlSearch.Controls.Add($sh)
+$pnlSearch.Controls.Add((New-Label "Mã CCCD / Mã bệnh nhân:" 30 70 200))
+$txtSearch = New-Box "PART_TextBox" 240 68 300
+$pnlSearch.Controls.Add($txtSearch)
+$btnBrowse = New-Object Windows.Forms.Button
+$btnBrowse.Name = "PART_BrowseButton"; $btnBrowse.Text = "Tìm"
+$btnBrowse.Location = "560,66"; $btnBrowse.Size = "90,28"
+$pnlSearch.Controls.Add($btnBrowse)
+
+$lblResult = New-Label "" 30 120 620
+$lblResult.Name = "SearchResultText"
+$lblResult.Font = New-Object Drawing.Font("Segoe UI", 11)
+$pnlSearch.Controls.Add($lblResult)
+
+$btnCreate = New-Object Windows.Forms.Button
+$btnCreate.Name = "btnCreatePatient"; $btnCreate.Text = "+ Tạo bệnh nhân mới"
+$btnCreate.Location = "30,160"; $btnCreate.Size = "200,38"; $btnCreate.Visible = $false
+$btnCreate.BackColor = [Drawing.Color]::FromArgb(0,150,90); $btnCreate.ForeColor = [Drawing.Color]::White
+$btnCreate.Font = New-Object Drawing.Font("Segoe UI", 10, [Drawing.FontStyle]::Bold)
+$pnlSearch.Controls.Add($btnCreate)
+$btnSelect = New-Object Windows.Forms.Button
+$btnSelect.Name = "btnSelectPatient"; $btnSelect.Text = "Chọn bệnh nhân"
+$btnSelect.Location = "250,160"; $btnSelect.Size = "180,38"; $btnSelect.Visible = $false
+$pnlSearch.Controls.Add($btnSelect)
+
+$script:knownPatients = @{ "111111111111" = "Nguyễn Có Sẵn"; "222222222222" = "Trần Đã Tồn Tại" }
+$btnBrowse.Add_Click({
+    $code = $txtSearch.Text.Trim()
+    if ($script:knownPatients.ContainsKey($code)) {
+        $lblResult.Text = "✓ Đã tìm thấy: " + $script:knownPatients[$code] + "   (CCCD $code)"
+        $lblResult.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
+        $btnSelect.Visible = $true; $btnCreate.Visible = $false
+    } else {
+        $lblResult.Text = "✗ Không tìm thấy bệnh nhân với mã '$code'. Có thể tạo mới."
+        $lblResult.ForeColor = [Drawing.Color]::FromArgb(180,0,0)
+        $btnCreate.Visible = $true; $btnSelect.Visible = $false
+    }
+})
+$btnCreate.Add_Click({ $pnlSearch.Visible = $false; $pnlReg.Visible = $true })
+$btnSelect.Add_Click({ $pnlSearch.Visible = $false; $pnlReg.Visible = $true })
 
 # ──────────── PANEL 3: OPD VISIT REGISTRATION (form điền) ────────────
 $pnlReg = New-Object Windows.Forms.Panel
@@ -148,6 +195,7 @@ $btnLogin.Add_Click({
 })
 
 $form.Controls.Add($pnlReg)
+$form.Controls.Add($pnlSearch)
 $form.Controls.Add($pnlHome)
 $form.Controls.Add($pnlLogin)
 [void][Windows.Forms.Application]::Run($form)

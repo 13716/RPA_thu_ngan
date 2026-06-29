@@ -13,6 +13,13 @@
     {"click": "OPD Visit Registration"},
     {"wait": 1.0}
   ],
+  "find_or_create": {
+    "search_box": "PART_TextBox",
+    "search_button": "PART_BrowseButton",
+    "search_value_key": "cccd",
+    "create_button": "btnCreatePatient",
+    "select_button": "btnSelectPatient"
+  },
   "fields": [
     {"key": "ho_ten",    "label": "Họ và tên bệnh nhân",          "auto_id": "txtHoTen",    "type": "text"},
     {"key": "ngay_sinh", "label": "Ngày tháng năm sinh",           "auto_id": "txtNgaySinh", "type": "date"},
