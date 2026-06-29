@@ -30,3 +30,6 @@ profiles/droidcam_client.json
 uia_walker/
 uia_walker.zip
 UIA_Analysis_Report_OrionHealth.html
+
+# Dữ liệu BN mock (runtime)
+mock_oh/patients.json

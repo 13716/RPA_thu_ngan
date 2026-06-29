@@ -9,6 +9,33 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 
+# ── lớp dữ liệu: lưu tạm bệnh nhân đã tạo vào patients.json (như "DB" của OH) ──
+$script:PatientsFile = Join-Path (Split-Path -Parent $PSCommandPath) "patients.json"
+function Get-Patients {
+    if (-not (Test-Path $script:PatientsFile)) { return @() }
+    try {
+        $raw = Get-Content $script:PatientsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        # lọc bỏ phần lồng/rác, chỉ giữ object có 'cccd' và dựng lại sạch
+        return @($raw | Where-Object { $_.cccd } | ForEach-Object {
+            [PSCustomObject]@{ cccd=$_.cccd; ho_ten=$_.ho_ten; ngay_sinh=$_.ngay_sinh;
+                               gioi_tinh=$_.gioi_tinh; dia_chi=$_.dia_chi; sdt=$_.sdt; bhyt=$_.bhyt }
+        })
+    } catch { return @() }
+}
+function Add-Patient($p) {
+    $list = @(Get-Patients)
+    $list += [PSCustomObject]@{ cccd=$p.cccd; ho_ten=$p.ho_ten; ngay_sinh=$p.ngay_sinh;
+                                gioi_tinh=$p.gioi_tinh; dia_chi=$p.dia_chi; sdt=$p.sdt; bhyt=$p.bhyt }
+    ConvertTo-Json -InputObject @($list) -Depth 3 | Out-File $script:PatientsFile -Encoding UTF8
+}
+function Refresh-SavedList {
+    if (-not $script:lstSaved) { return }
+    $script:lstSaved.Items.Clear()
+    foreach ($p in Get-Patients) {
+        [void]$script:lstSaved.Items.Add(("{0,-15} {1,-22} {2,-12} {3}" -f $p.cccd, $p.ho_ten, $p.ngay_sinh, $p.gioi_tinh))
+    }
+}
+
 $form = New-Object Windows.Forms.Form
 $form.Name = "FormMain"                               # auto_id cửa sổ (như OH)
 $form.Text = "Orion Health HIS (UAT Environment)"
@@ -87,7 +114,7 @@ foreach ($a in $apps) {
     $b.TextAlign = "MiddleLeft"
     $b.Font = New-Object Drawing.Font("Segoe UI", 10)
     if ($a -eq "OPD Visit Registration") {
-        $b.Add_Click({ $pnlHome.Visible = $false; $pnlSearch.Visible = $true })
+        $b.Add_Click({ $pnlHome.Visible = $false; $pnlSearch.Visible = $true; Refresh-SavedList })
     } else {
         $b.Add_Click({ [Windows.Forms.MessageBox]::Show("(mock) màn '$($this.Name)' chưa dựng") })
     }
@@ -126,11 +153,25 @@ $btnSelect.Name = "btnSelectPatient"; $btnSelect.Text = "Chọn bệnh nhân"
 $btnSelect.Location = "250,160"; $btnSelect.Size = "180,38"; $btnSelect.Visible = $false
 $pnlSearch.Controls.Add($btnSelect)
 
+# danh sách BỆNH NHÂN ĐÃ LƯU (từ patients.json) — hiển thị dưới phần tìm kiếm
+$pnlSearch.Controls.Add((New-Label "Bệnh nhân đã lưu (patients.json):" 30 214 400))
+$lstSaved = New-Object Windows.Forms.ListBox
+$lstSaved.Name = "lstSavedPatients"; $lstSaved.Location = "30,238"; $lstSaved.Size = "660,300"
+$lstSaved.Font = New-Object Drawing.Font("Consolas", 9)
+$pnlSearch.Controls.Add($lstSaved)
+$script:lstSaved = $lstSaved
+
 $script:knownPatients = @{ "111111111111" = "Nguyễn Có Sẵn"; "222222222222" = "Trần Đã Tồn Tại" }
 $btnBrowse.Add_Click({
     $code = $txtSearch.Text.Trim()
-    if ($script:knownPatients.ContainsKey($code)) {
-        $lblResult.Text = "✓ Đã tìm thấy: " + $script:knownPatients[$code] + "   (CCCD $code)"
+    $name = $null
+    if ($script:knownPatients.ContainsKey($code)) { $name = $script:knownPatients[$code] }
+    else {
+        $saved = Get-Patients | Where-Object { "$($_.cccd)" -eq $code } | Select-Object -First 1
+        if ($saved) { $name = $saved.ho_ten }
+    }
+    if ($name) {
+        $lblResult.Text = "✓ Đã tìm thấy: $name   (CCCD $code)"
         $lblResult.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
         $btnSelect.Visible = $true; $btnCreate.Visible = $false
     } else {
@@ -174,7 +215,21 @@ $btnSave.BackColor = [Drawing.Color]::FromArgb(0,150,90)
 $btnSave.ForeColor = [Drawing.Color]::White
 $lblSaved = New-Label "" 420 ($y+6) 220
 $lblSaved.Name = "StatusTextBlock"; $lblSaved.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
-$btnSave.Add_Click({ $lblSaved.Text = "✓ Đã lưu bản ghi (mock)" })
+$btnSave.Add_Click({
+    $get = { param($n) $c = $pnlReg.Controls.Find($n, $true); if ($c.Count) { $c[0].Text } else { "" } }
+    $p = [PSCustomObject][ordered]@{
+        cccd      = & $get "txtCCCD"
+        ho_ten    = & $get "txtHoTen"
+        ngay_sinh = & $get "txtNgaySinh"
+        gioi_tinh = & $get "txtGioiTinh"
+        dia_chi   = & $get "txtDiaChi"
+        sdt       = & $get "txtSDT"
+        bhyt      = & $get "txtBHYT"
+    }
+    Add-Patient $p
+    Refresh-SavedList
+    $lblSaved.Text = "✓ Đã lưu vào patients.json"
+})
 $pnlReg.Controls.Add($btnSave)
 $pnlReg.Controls.Add($lblSaved)
 
