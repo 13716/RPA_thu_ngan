@@ -191,7 +191,7 @@ def _run_steps(dlg, steps: list) -> None:
             continue
         aid = st.get("fill") or st.get("click")
         ctrl = None
-        for _ in range(10):                                # chờ control xuất hiện sau điều hướng
+        for _ in range(6):                                 # chờ control xuất hiện (tối đa ~3s rồi bỏ qua)
             try:
                 c = dlg.child_window(auto_id=aid).wrapper_object()
                 if c.is_visible():
@@ -240,9 +240,18 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
     dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
     steps = profile.get("steps") if profile else None
     if steps:                                              # app nhiều màn: tự đăng nhập + mở form
-        print("🧭 Điều hướng (đăng nhập → mở màn)...")
-        force_front(dlg)                                   # đưa ĐÚNG cửa sổ lên trước (click không trúng cửa sổ khác)
-        _run_steps(dlg, steps)
+        # nếu ĐÃ ở màn cần điền (ô đầu hiện sẵn) → bỏ qua điều hướng (gửi tiếp nhanh, không treo)
+        on_form = False
+        if fields:
+            try:
+                _locate(dlg, fields[0]); on_form = True
+            except Exception:
+                on_form = False
+        if on_form:
+            print("✓ Đã ở màn cần điền — bỏ qua đăng nhập/điều hướng.")
+        else:
+            print("🧭 Điều hướng (đăng nhập → mở màn)...")
+            _run_steps(dlg, steps)                         # invoke(): không cần cửa sổ ở trên cùng
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
         end = time.time() + 20
