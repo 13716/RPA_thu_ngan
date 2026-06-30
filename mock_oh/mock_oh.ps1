@@ -129,6 +129,12 @@ $pnlSearch.Dock = "Fill"; $pnlSearch.Visible = $false
 $sh = New-Label "Tra cứu bệnh nhân" 30 16 400
 $sh.Font = New-Object Drawing.Font("Segoe UI", 15, [Drawing.FontStyle]::Bold)
 $pnlSearch.Controls.Add($sh)
+
+$btnSearchBack = New-Object Windows.Forms.Button
+$btnSearchBack.Name = "SearchBackButton"; $btnSearchBack.Text = "← Trang chủ"
+$btnSearchBack.Location = "560,14"; $btnSearchBack.Size = "120,30"
+$btnSearchBack.Add_Click({ $pnlSearch.Visible = $false; $pnlHome.Visible = $true })
+$pnlSearch.Controls.Add($btnSearchBack)
 $pnlSearch.Controls.Add((New-Label "Mã CCCD / Mã bệnh nhân:" 30 70 200))
 $txtSearch = New-Box "PART_TextBox" 240 68 300
 $pnlSearch.Controls.Add($txtSearch)
