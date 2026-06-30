@@ -55,20 +55,18 @@ def check_bhyt_web(data: dict) -> str:
         items = [{**f, "value": next((v for k, v in m.items() if k in f["entry"]), None)} for f in fields]
         web_target.apply_fills(page, items)
         print("   🔒 Trang có captcha — HÃY giải captcha + bấm 'Tra cứu' trên trình duyệt...")
-        try:
-            page.wait_for_selector("text=/còn hạn|hết hạn|giá trị sử dụng|không tìm thấy/i", timeout=180000)
-            import re
-            body = page.inner_text("body")
-            mres = re.search(r"(?i)(còn hạn[^\n]{0,60}|đã hết hạn[^\n]{0,40}|giá trị sử dụng[^\n]{0,60})", body)
-            result = mres.group(1).strip() if mres else "(đã có kết quả — xem trình duyệt)"
-        except Exception:
-            result = "(chưa đọc được kết quả — captcha chưa giải / hết thời gian)"
+        print("   🤖 CUA đang chờ kết quả rồi CHỤP + đọc (tối đa 3 phút)...")
+        r = web_target.cua_read_result(page)            # CUA chụp màn + Gemini đọc kết quả
         if not owns:
             print("   (giữ tab của bạn)")
         else:
             try: browser.close()
             except Exception: pass
-    return result
+    if r.get("con_han") is True:
+        return f"CÒN HẠN (đến {r.get('gia_tri_den') or '?'}) — {r.get('ghi_chu','')}"
+    if r.get("con_han") is False:
+        return f"ĐÃ HẾT HẠN — {r.get('ghi_chu','')}"
+    return f"CHƯA xác định — {r.get('ghi_chu','')}"
 
 
 def fill_oh(data: dict) -> None:

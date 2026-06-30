@@ -150,6 +150,41 @@ def has_captcha(page) -> bool:
         return False
 
 
+def cua_read_result(page, *, timeout: int = 180000) -> dict:
+    """CUA đọc KẾT QUẢ tra cứu: chờ kết quả hiện (sau khi NGƯỜI giải captcha + bấm Tra cứu)
+    → CHỤP màn → Gemini đọc → trả JSON {con_han, gia_tri_den, ho_ten, ghi_chu}.
+    Dùng vision nên không phụ thuộc cấu trúc DOM của trang."""
+    import cv2
+    import numpy as np
+    import json
+    from test_image_processing import create_ocr_adapter, prepare_for_api
+    # trigger nhẹ: chờ trang xuất hiện chữ kết quả (đọc nội dung vẫn bằng vision)
+    try:
+        page.wait_for_selector(
+            "text=/giá trị sử dụng|còn hạn|hết hạn|không tìm thấy|không đúng|thẻ bhyt/i",
+            timeout=timeout)
+    except Exception:
+        pass
+    page.wait_for_timeout(1000)
+    png = page.screenshot(type="png", full_page=True)
+    img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+    b64, _ = prepare_for_api(img)
+    prompt = (
+        "Đây là ẢNH KẾT QUẢ tra cứu thời hạn sử dụng thẻ BHYT. Đọc và trả DUY NHẤT JSON:\n"
+        '{"con_han": true|false|null, "gia_tri_den": "DD/MM/YYYY hoặc null", '
+        '"ho_ten": "tên hoặc null", "ghi_chu": "tóm tắt ngắn"}\n'
+        "con_han=true nếu thẻ CÒN hạn, false nếu ĐÃ HẾT hạn, null nếu chưa có kết quả/không tìm thấy.")
+    res = create_ocr_adapter().ocr(b64, prompt=prompt)
+    if res.get("success"):
+        m = re.search(r"\{.*\}", res.get("text", ""), re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                pass
+    return {"con_han": None, "ghi_chu": "CUA chưa đọc được kết quả (captcha chưa giải / hết giờ)"}
+
+
 def try_submit(page, submit_text: str = SUBMIT_RE) -> bool:
     """Bấm nút gửi/tra cứu — thử nhiều kiểu, timeout NGẮN (không treo 30s)."""
     rx = re.compile(submit_text, re.I)
