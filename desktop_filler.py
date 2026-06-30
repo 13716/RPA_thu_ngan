@@ -242,10 +242,26 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
         win_aid = None
 
     dlg = connect_or_launch(title, exe, window_auto_id=win_aid)
+    def _visible(aid):
+        try:
+            return dlg.child_window(auto_id=aid).wrapper_object().is_visible()
+        except Exception:
+            return False
+
     steps = profile.get("steps") if profile else None
     foc = profile.get("find_or_create") if profile else None
-    if steps or foc:                                       # app nhiều màn: đăng nhập + tra cứu + mở form
-        # nếu ĐÃ ở màn cần điền (ô đầu hiện sẵn) → bỏ qua điều hướng (gửi tiếp nhanh, không treo)
+    if foc:                                                # MỖI bệnh nhân: phải tra cứu lại
+        if not _visible(foc["search_box"]):                # chưa ở màn tra cứu → điều hướng tới
+            if steps:
+                print("🧭 Điều hướng → màn tra cứu...")
+                _run_steps(dlg, steps)
+        import cua_desktop
+        print("🤖 Tra cứu + quyết định (CUA vision → UIA bấm nút)...")
+        found = cua_desktop.find_or_create(dlg, foc, values_by_id)
+        if found:                                          # ĐÃ CÓ → bỏ qua, sang bệnh nhân khác
+            print("✓ Bệnh nhân ĐÃ CÓ trong hệ thống → BỎ QUA (không tạo/điền), sang bệnh nhân khác.")
+            return {"_existing": True}
+    elif steps:                                            # app nhiều màn không có tra cứu
         on_form = False
         if fields:
             try:
@@ -255,16 +271,8 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
         if on_form:
             print("✓ Đã ở màn cần điền — bỏ qua điều hướng.")
         else:
-            if steps:
-                print("🧭 Điều hướng (đăng nhập → mở màn)...")
-                _run_steps(dlg, steps)                     # invoke(): không cần cửa sổ ở trên cùng
-            if foc:                                        # tra cứu → CUA quyết định có/chưa → chọn/tạo mới
-                import cua_desktop
-                print("🤖 Tra cứu + quyết định (CUA vision → UIA bấm nút)...")
-                found = cua_desktop.find_or_create(dlg, foc, values_by_id)
-                if found:                                  # ĐÃ CÓ trong hệ thống → KHÔNG nhập mới
-                    print("✓ Bệnh nhân ĐÃ CÓ trong hệ thống → mở hồ sơ, KHÔNG điền form đăng ký mới.")
-                    return {"_existing": True}
+            print("🧭 Điều hướng (đăng nhập → mở màn)...")
+            _run_steps(dlg, steps)
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
         end = time.time() + 20

@@ -181,7 +181,11 @@ $btnBrowse.Add_Click({
     }
 })
 $btnCreate.Add_Click({ $pnlSearch.Visible = $false; $pnlReg.Visible = $true })
-$btnSelect.Add_Click({ $pnlSearch.Visible = $false; $pnlReg.Visible = $true })
+# ĐÃ CÓ -> mở hồ sơ (ở lại màn tra cứu, sẵn sàng cho bệnh nhân kế)
+$btnSelect.Add_Click({
+    $lblResult.Text = "✓ Đã mở hồ sơ bệnh nhân (không tạo mới)."
+    $btnSelect.Visible = $false; $txtSearch.Clear()
+})
 
 # ──────────── PANEL 3: OPD VISIT REGISTRATION (form điền) ────────────
 $pnlReg = New-Object Windows.Forms.Panel
@@ -227,8 +231,13 @@ $btnSave.Add_Click({
         bhyt      = & $get "txtBHYT"
     }
     Add-Patient $p
+    # xoá form + QUAY VỀ màn tra cứu (sẵn sàng bệnh nhân kế)
+    foreach ($fld in $regFields) { $c = $pnlReg.Controls.Find($fld[1], $true); if ($c.Count) { $c[0].Clear() } }
+    $pnlReg.Visible = $false; $pnlSearch.Visible = $true
     Refresh-SavedList
-    $lblSaved.Text = "✓ Đã lưu vào patients.json"
+    $txtSearch.Clear(); $btnCreate.Visible = $false; $btnSelect.Visible = $false
+    $lblResult.Text = "✓ Đã lưu bệnh nhân mới vào patients.json. Tra cứu bệnh nhân tiếp theo..."
+    $lblResult.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
 })
 $pnlReg.Controls.Add($btnSave)
 $pnlReg.Controls.Add($lblSaved)
