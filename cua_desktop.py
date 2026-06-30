@@ -87,6 +87,42 @@ def _decide_found(dlg, create_aid) -> bool:
         return False
 
 
+def handle_popup(dlg, cfg: dict) -> bool:
+    """Sau thao tác (vd Lưu), nếu hiện HỘP THOẠI/CẢNH BÁO bất ngờ → CUA chụp + đọc →
+    quyết định bấm nút nào. Trả True nếu có xử lý pop-up."""
+    yes_aid = cfg["yes_button"]
+    no_aid = cfg.get("no_button")
+    pop = _wait_ctrl(dlg, yes_aid, tries=5)            # pop-up hiện = nút Yes có
+    if pop is None:
+        return False
+    print("  ⚠️  Phát hiện HỘP THOẠI bất ngờ — CUA đọc nội dung...")
+    action = "yes"
+    b64 = capture_b64(dlg)
+    if b64:
+        try:
+            prompt = cfg.get("prompt") or (
+                "Trên màn hình đang có một HỘP THOẠI / CẢNH BÁO. Đọc nội dung và quyết định "
+                "nên bấm nút nào: 'yes' (đồng ý / tiếp tục / vẫn tạo mới) hay 'no' (huỷ / không). "
+                "Nếu là cảnh báo TRÙNG bệnh nhân và đã xác minh trước đó là CHƯA có thì chọn 'yes'.\n"
+                'CHỈ trả JSON: {"action": "yes"|"no", "ly_do": "ngắn gọn"}')
+            res = create_ocr_adapter().ocr(b64, prompt=prompt)
+            if res.get("success"):
+                m = re.search(r"\{.*\}", res.get("text", ""), re.S)
+                if m:
+                    d = json.loads(m.group(0))
+                    action = (d.get("action") or "yes").lower()
+                    print(f"  🤖 CUA đọc pop-up → '{action}'  ({str(d.get('ly_do',''))[:50]})")
+        except Exception as e:
+            print(f"  ⚠️  CUA đọc pop-up lỗi ({str(e)[:40]}) → mặc định 'yes'")
+    target = yes_aid if action == "yes" else (no_aid or yes_aid)
+    t = _wait_ctrl(dlg, target)
+    if t:
+        _click(t)
+        print(f"  ➡️  bấm nút pop-up: {target}")
+        time.sleep(0.6)
+    return True
+
+
 def find_or_create(dlg, cfg: dict, values: dict) -> bool:
     """Gõ mã tra cứu → bấm Tìm → CUA quyết định có/chưa → bấm Chọn (nếu có) hoặc Tạo mới (nếu chưa).
     Trả True nếu bệnh nhân đã tồn tại."""

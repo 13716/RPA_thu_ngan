@@ -225,25 +225,13 @@ $btnSave.BackColor = [Drawing.Color]::FromArgb(0,150,90)
 $btnSave.ForeColor = [Drawing.Color]::White
 $lblSaved = New-Label "" 420 ($y+6) 220
 $lblSaved.Name = "StatusTextBlock"; $lblSaved.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
+# Save -> HIỆN HỘP THOẠI kiểm trùng (như OH cảnh báo) -> CUA quyết định
 $btnSave.Add_Click({
-    $get = { param($n) $c = $pnlReg.Controls.Find($n, $true); if ($c.Count) { $c[0].Text } else { "" } }
-    $p = [PSCustomObject][ordered]@{
-        cccd      = & $get "txtCCCD"
-        ho_ten    = & $get "txtHoTen"
-        ngay_sinh = & $get "txtNgaySinh"
-        gioi_tinh = & $get "txtGioiTinh"
-        dia_chi   = & $get "txtDiaChi"
-        sdt       = & $get "txtSDT"
-        bhyt      = & $get "txtBHYT"
-    }
-    Add-Patient $p
-    # xoá form + QUAY VỀ màn tra cứu (sẵn sàng bệnh nhân kế)
-    foreach ($fld in $regFields) { $c = $pnlReg.Controls.Find($fld[1], $true); if ($c.Count) { $c[0].Clear() } }
-    $pnlReg.Visible = $false; $pnlSearch.Visible = $true
-    Refresh-SavedList
-    $txtSearch.Clear(); $btnCreate.Visible = $false; $btnSelect.Visible = $false
-    $lblResult.Text = "✓ Đã lưu bệnh nhân mới vào patients.json. Tra cứu bệnh nhân tiếp theo..."
-    $lblResult.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
+    $g = $pnlReg.Controls.Find("txtCCCD", $true)
+    $code = if ($g.Count) { $g[0].Text } else { "" }
+    $script:popMsg.Text = "Cảnh báo: CCCD '$code' có thể đã tồn tại trong hệ thống. Bạn vẫn muốn TẠO MỚI bệnh nhân này?"
+    $script:pnlPopup.Visible = $true
+    $script:pnlPopup.BringToFront()
 })
 $pnlReg.Controls.Add($btnSave)
 $pnlReg.Controls.Add($lblSaved)
@@ -253,6 +241,43 @@ $btnBack.Name = "BackButton"; $btnBack.Text = "← Trang chủ"
 $btnBack.Location = "30,$y"; $btnBack.Size = "120,36"
 $btnBack.Add_Click({ $pnlReg.Visible = $false; $pnlHome.Visible = $true })
 $pnlReg.Controls.Add($btnBack)
+
+# ──────────── HỘP THOẠI kiểm trùng (TH2 — CUA đọc + quyết định) ────────────
+$pnlPopup = New-Object Windows.Forms.Panel
+$pnlPopup.Name = "DuplicateDialog"; $pnlPopup.Size = "500,190"; $pnlPopup.Location = "210,210"
+$pnlPopup.BorderStyle = "FixedSingle"; $pnlPopup.BackColor = [Drawing.Color]::FromArgb(255,250,235)
+$pnlPopup.Visible = $false
+$ptitle = New-Label "⚠ Cảnh báo trùng bệnh nhân" 18 14 460
+$ptitle.Font = New-Object Drawing.Font("Segoe UI", 12, [Drawing.FontStyle]::Bold)
+$ptitle.ForeColor = [Drawing.Color]::FromArgb(180,80,0)
+$pnlPopup.Controls.Add($ptitle)
+$popMsg = New-Object Windows.Forms.Label
+$popMsg.Name = "PopupMessage"; $popMsg.Location = "18,46"; $popMsg.Size = "464,70"
+$popMsg.Font = New-Object Drawing.Font("Segoe UI", 10)
+$pnlPopup.Controls.Add($popMsg)
+$btnYes = New-Object Windows.Forms.Button
+$btnYes.Name = "btnPopupYes"; $btnYes.Text = "Vẫn tạo mới"; $btnYes.Location = "120,128"; $btnYes.Size = "150,38"
+$btnYes.BackColor = [Drawing.Color]::FromArgb(0,150,90); $btnYes.ForeColor = [Drawing.Color]::White
+$pnlPopup.Controls.Add($btnYes)
+$btnNo = New-Object Windows.Forms.Button
+$btnNo.Name = "btnPopupNo"; $btnNo.Text = "Hủy bỏ"; $btnNo.Location = "290,128"; $btnNo.Size = "120,38"
+$pnlPopup.Controls.Add($btnNo)
+$script:pnlPopup = $pnlPopup; $script:popMsg = $popMsg
+
+$btnYes.Add_Click({                                   # ĐỒNG Ý → lưu thật + về tra cứu
+    $pnlPopup.Visible = $false
+    $get = { param($n) $c = $pnlReg.Controls.Find($n, $true); if ($c.Count) { $c[0].Text } else { "" } }
+    Add-Patient ([PSCustomObject][ordered]@{
+        cccd = (& $get "txtCCCD"); ho_ten = (& $get "txtHoTen"); ngay_sinh = (& $get "txtNgaySinh")
+        gioi_tinh = (& $get "txtGioiTinh"); dia_chi = (& $get "txtDiaChi"); sdt = (& $get "txtSDT"); bhyt = (& $get "txtBHYT")
+    })
+    foreach ($fld in $regFields) { $c = $pnlReg.Controls.Find($fld[1], $true); if ($c.Count) { $c[0].Clear() } }
+    $pnlReg.Visible = $false; $pnlSearch.Visible = $true; Refresh-SavedList
+    $txtSearch.Clear(); $btnCreate.Visible = $false; $btnSelect.Visible = $false
+    $lblResult.Text = "✓ Đã lưu bệnh nhân mới. Tra cứu bệnh nhân tiếp theo..."
+    $lblResult.ForeColor = [Drawing.Color]::FromArgb(0,120,0)
+})
+$btnNo.Add_Click({ $pnlPopup.Visible = $false })      # HỦY → ở lại form
 
 # ───────────────── điều hướng ─────────────────
 $btnLogin.Add_Click({
@@ -264,6 +289,7 @@ $btnLogin.Add_Click({
     $form.Text = "Registration (UAT Environment) - $($txtUser.Text)"
 })
 
+$form.Controls.Add($pnlPopup)
 $form.Controls.Add($pnlReg)
 $form.Controls.Add($pnlSearch)
 $form.Controls.Add($pnlHome)

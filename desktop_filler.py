@@ -305,6 +305,10 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
         print(f"  • {f['label']:<22} điền {v!r} → đọc lại {rb!r}  [{flag}]")
     if submit:
         do_submit(dlg, submit_cfg)
+        popup_cfg = profile.get("popup") if profile else None
+        if popup_cfg:                                      # OH có thể hiện hộp thoại sau Lưu → CUA xử lý
+            import cua_desktop
+            cua_desktop.handle_popup(dlg, popup_cfg)
     return out
 
 
