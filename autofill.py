@@ -470,7 +470,10 @@ def run_profile(args) -> int:
             access_filler.fill_access(values, profile=prof, form_name=prof.get("form_name") or None)
         else:
             import desktop_filler
-            desktop_filler.fill_desktop(values, submit=True, profile=prof)
+            res = desktop_filler.fill_desktop(values, submit=True, profile=prof)
+            if isinstance(res, dict) and res.get("_existing"):
+                print("\n✅ Bệnh nhân đã có trong hệ thống — đã mở hồ sơ (KHÔNG tạo/điền mới).")
+                return 0
         print("\n✅ Đã điền vào app theo profile.")
         return 0
     return _run_records(args, fields, do_one)

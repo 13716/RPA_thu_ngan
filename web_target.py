@@ -158,14 +158,15 @@ def cua_read_result(page, *, timeout: int = 180000) -> dict:
     import numpy as np
     import json
     from test_image_processing import create_ocr_adapter, prepare_for_api
-    # trigger nhẹ: chờ trang xuất hiện chữ kết quả (đọc nội dung vẫn bằng vision)
+    # trigger: chờ chữ CỦA KẾT QUẢ (không lấy 'thẻ BHYT' vì có sẵn trong form → đóng sớm)
     try:
         page.wait_for_selector(
-            "text=/giá trị sử dụng|còn hạn|hết hạn|không tìm thấy|không đúng|thẻ bhyt/i",
+            "text=/giá trị sử dụng đến|thẻ.*còn hạn|đã hết hạn|hết hiệu lực|"
+            "không tìm thấy thông tin|không tồn tại|chưa được cấp/i",
             timeout=timeout)
     except Exception:
         pass
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(1200)
     png = page.screenshot(type="png", full_page=True)
     img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
     b64, _ = prepare_for_api(img)

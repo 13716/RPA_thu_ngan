@@ -261,7 +261,10 @@ def fill_desktop(values_by_id: dict, *, submit: bool = False, profile: "dict | N
             if foc:                                        # tra cứu → CUA quyết định có/chưa → chọn/tạo mới
                 import cua_desktop
                 print("🤖 Tra cứu + quyết định (CUA vision → UIA bấm nút)...")
-                cua_desktop.find_or_create(dlg, foc, values_by_id)
+                found = cua_desktop.find_or_create(dlg, foc, values_by_id)
+                if found:                                  # ĐÃ CÓ trong hệ thống → KHÔNG nhập mới
+                    print("✓ Bệnh nhân ĐÃ CÓ trong hệ thống → mở hồ sơ, KHÔNG điền form đăng ký mới.")
+                    return {"_existing": True}
     # chờ form tải xong (ô đầu tiên xuất hiện) — mở file mất vài giây
     if fields:
         end = time.time() + 20
